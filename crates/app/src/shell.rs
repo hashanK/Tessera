@@ -8,7 +8,11 @@ use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::System::Com::*;
-use windows::Win32::System::Ole::{IDropSource, IDropTarget, DROPEFFECT_COPY, DROPEFFECT_LINK, DROPEFFECT_MOVE};
+use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard, RegisterClipboardFormatW};
+use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+use windows::Win32::System::Ole::{IDropSource, IDropTarget, CF_HDROP, DROPEFFECT_COPY, DROPEFFECT_LINK, DROPEFFECT_MOVE};
+use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+use windows::Win32::UI::Input::KeyboardAndMouse::SetFocus;
 use windows::Win32::System::Variant::VARIANT;
 use windows::Win32::UI::Shell::Common::*;
 use windows::Win32::UI::Shell::*;
@@ -390,14 +394,16 @@ impl IFileOperationProgressSink_Impl for ArrivalSink_Impl {
 /// the same progress and conflict dialogs as Explorer, and Ctrl+Z in Explorer undoes it.
 /// Runs on its own thread so a large copy never stalls the groups or the program dragged from.
 /// Each file that arrives is reported to `notify` as `msg` with a `Box<(String, u32)>` (path, group).
-/// `dest` is the folder to put them in; None means the Desktop.
-pub fn transfer(files: Vec<String>, move_them: bool, dest: Option<String>, notify: HWND, msg: u32, group: u32) {
+/// `dest` is the folder to put them in; None means the Desktop. With `rename_on_collision` a
+/// name that is taken gets a new one ("… - Copy"), as when pasting in Explorer; otherwise the
+/// shell asks whether to replace or skip, as when dropping.
+pub fn transfer(files: Vec<String>, move_them: bool, dest: Option<String>, notify: HWND, msg: u32, group: u32, rename_on_collision: bool) {
     let notify = notify.0 as isize;
     std::thread::spawn(move || unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         let run = || -> Result<()> {
             let op: IFileOperation = CoCreateInstance(&FileOperation, None, CLSCTX_ALL)?;
-            op.SetOperationFlags(FOF_ALLOWUNDO)?;
+            op.SetOperationFlags(if rename_on_collision { FILEOPERATION_FLAGS(FOF_ALLOWUNDO.0 | FOF_RENAMEONCOLLISION.0) } else { FOF_ALLOWUNDO })?;
             let sink: IFileOperationProgressSink = ArrivalSink { notify, msg, group }.into();
             op.Advise(&sink)?;
             let desktop: IShellItem = match &dest {
@@ -435,9 +441,10 @@ pub fn menu_message(msg: u32, wp: WPARAM, lp: LPARAM) -> bool {
     }
 }
 
-/// Run an item's own "delete" verb, exactly as Explorer does for the Delete key: to the Recycle
-/// Bin (Explorer's confirmation and undo apply), or permanently with `permanent` (Shift+Delete).
-pub fn delete(hwnd: HWND, pidl: &Pidl, permanent: bool) -> Result<()> {
+/// Run one of an item's own shell verbs, exactly as Explorer does for the matching key:
+/// "delete" (to the Recycle Bin, or permanently with `shift`, as Shift+Delete), "copy", "cut",
+/// "properties".
+pub fn invoke_verb(hwnd: HWND, pidl: &Pidl, verb: &str, shift: bool) -> Result<()> {
     unsafe {
         let mut child = std::ptr::null_mut();
         let parent: IShellFolder = SHBindToParent(pidl.as_ptr(), Some(&mut child))?;
@@ -445,19 +452,87 @@ pub fn delete(hwnd: HWND, pidl: &Pidl, permanent: bool) -> Result<()> {
         // Some handlers only accept a verb after building their menu.
         let popup = CreatePopupMenu()?;
         let _ = menu.QueryContextMenu(popup, 0, 1, 0x7FFF, CMF_NORMAL);
+        let ansi: Vec<u8> = verb.bytes().chain([0]).collect();
+        let wide: Vec<u16> = verb.encode_utf16().chain([0]).collect();
         let info = CMINVOKECOMMANDINFOEX {
             cbSize: std::mem::size_of::<CMINVOKECOMMANDINFOEX>() as u32,
-            // CMIC_MASK_UNICODE, plus CMIC_MASK_SHIFT_DOWN for a permanent delete.
-            fMask: 0x4000 | if permanent { 0x1000_0000 } else { 0 },
+            // CMIC_MASK_UNICODE, plus CMIC_MASK_SHIFT_DOWN when Shift is held.
+            fMask: 0x4000 | if shift { 0x1000_0000 } else { 0 },
             hwnd,
-            lpVerb: windows::core::s!("delete"),
-            lpVerbW: w!("delete"),
+            lpVerb: PCSTR(ansi.as_ptr()),
+            lpVerbW: PCWSTR(wide.as_ptr()),
             nShow: SW_SHOWNORMAL.0,
             ..Default::default()
         };
         let result = menu.InvokeCommand(&info as *const _ as *const CMINVOKECOMMANDINFO);
         let _ = DestroyMenu(popup);
         result
+    }
+}
+
+/// The name as the user edits it (F2): without a hidden extension, with a shown one.
+pub fn edit_name(pidl: &Pidl) -> Option<String> {
+    unsafe {
+        let mut child = std::ptr::null_mut();
+        let parent: IShellFolder = SHBindToParent(pidl.as_ptr(), Some(&mut child)).ok()?;
+        Some(display_name(&parent, child, SHGDNF(SHGDN_INFOLDER.0 | SHGDN_FOREDITING.0))).filter(|n| !n.is_empty())
+    }
+}
+
+/// Rename an item the way Explorer's in-place rename does: the shell keeps a hidden extension,
+/// and reports problems (a name that exists, characters not allowed) in its own dialogs.
+pub fn rename(hwnd: HWND, pidl: &Pidl, name: &str) -> Result<()> {
+    unsafe {
+        let mut child = std::ptr::null_mut();
+        let parent: IShellFolder = SHBindToParent(pidl.as_ptr(), Some(&mut child))?;
+        parent.SetNameOf(Some(hwnd), child, &HSTRING::from(name), SHGDNF(SHGDN_INFOLDER.0 | SHGDN_FOREDITING.0), None)
+    }
+}
+
+/// Files on the clipboard (copied or cut in Explorer or here), and whether they were cut.
+pub fn clipboard_files(owner: HWND) -> Option<(Vec<String>, bool)> {
+    unsafe {
+        OpenClipboard(Some(owner)).ok()?;
+        let read = || -> Option<(Vec<String>, bool)> {
+            let hdrop = HDROP(GetClipboardData(CF_HDROP.0 as u32).ok()?.0);
+            let count = DragQueryFileW(hdrop, u32::MAX, None);
+            let files: Vec<String> = (0..count)
+                .filter_map(|i| {
+                    let mut buf = vec![0u16; DragQueryFileW(hdrop, i, None) as usize + 1];
+                    let n = DragQueryFileW(hdrop, i, Some(&mut buf)) as usize;
+                    (n > 0).then(|| String::from_utf16_lossy(&buf[..n]))
+                })
+                .collect();
+            // "Preferred DropEffect" says whether the files were cut (move) or copied.
+            let effect = RegisterClipboardFormatW(w!("Preferred DropEffect"));
+            let cut = GetClipboardData(effect).ok().is_some_and(|h| {
+                let p = GlobalLock(HGLOBAL(h.0)) as *const u32;
+                let v = !p.is_null() && *p & 2 != 0; // DROPEFFECT_MOVE
+                let _ = GlobalUnlock(HGLOBAL(h.0));
+                v
+            });
+            (!files.is_empty()).then_some((files, cut))
+        };
+        let result = read();
+        let _ = CloseClipboard();
+        result
+    }
+}
+
+/// Bring one of our windows to the front from a key handled by the keyboard hook. Windows only
+/// lets the active program hand over the foreground, so borrow its input state for a moment,
+/// the usual way for a desktop shell helper.
+pub fn take_foreground(hwnd: HWND) {
+    unsafe {
+        let fg = GetForegroundWindow();
+        let theirs = GetWindowThreadProcessId(fg, None);
+        let ours = GetCurrentThreadId();
+        let attached = theirs != 0 && theirs != ours && AttachThreadInput(ours, theirs, true).as_bool();
+        let _ = SetForegroundWindow(hwnd);
+        let _ = SetFocus(Some(hwnd));
+        if attached {
+            let _ = AttachThreadInput(ours, theirs, false);
+        }
     }
 }
 

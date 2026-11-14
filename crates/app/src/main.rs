@@ -196,6 +196,12 @@ struct App {
     tray_icon: HICON,
     repaint: HashSet<u32>,
     rename: Option<(u32, HWND, HFONT)>,
+    /// The item being renamed in place (F2), when `rename` is over an icon rather than a title.
+    rename_item: Option<String>,
+    /// A new folder to select and rename as soon as it appears (Ctrl+Shift+N).
+    pending_rename: Option<String>,
+    /// Letters typed to jump to an icon, and when the last one came.
+    typeahead: (String, Option<std::time::Instant>),
     /// (source group, item key) while one of our own icons is in an OLE drag.
     own_drag: Option<(u32, String)>,
     /// Files being brought onto the desktop by a drop: lower-cased destination path -> group to file it in.
@@ -593,6 +599,7 @@ impl App {
             }
         }
         if changed.is_empty() {
+            self.rename_if_arrived();
             return;
         }
         for id in changed {
@@ -603,6 +610,7 @@ impl App {
             }
         }
         self.dirty();
+        self.rename_if_arrived();
     }
 
     fn zone(&self, id: u32, x: i32, y: i32) -> Zone {
@@ -717,22 +725,306 @@ impl App {
     }
 
     /// Delete / Shift+Delete / Enter pressed on the desktop while an item is selected.
-    fn item_key(&mut self, key: VIRTUAL_KEY, shift: bool) {
-        let Some((host, index)) = self.ui.iter().find_map(|(id, ui)| ui.selected.map(|i| (*id, i))) else { return };
-        let Some(key_name) = self.cfg.fence(self.cfg.shown_tab(host)).and_then(|f| f.items.get(index)).cloned() else { return };
-        let (Some(item), Some(hwnd)) = (self.items.get(&key_name), self.hwnd(host)) else { return };
-        let pidl = item.pidl.clone();
-        if key == VK_RETURN {
-            shell::open(hwnd, &pidl);
-        } else if key == VK_DELETE {
-            // System items (This PC, Recycle Bin, Network…) aren't files; the Delete key leaves them alone.
-            if key_name.starts_with("::") {
+    /// The selected item: (window, position in the tab on screen, item key).
+    fn selected_item(&self) -> Option<(u32, usize, String)> {
+        let (host, index) = self.ui.iter().find_map(|(id, ui)| ui.selected.map(|i| (*id, i)))?;
+        let key = self.cfg.fence(self.cfg.shown_tab(host))?.items.get(index)?.clone();
+        Some((host, index, key))
+    }
+
+    /// Items of the tab on screen in window `host`.
+    fn shown_items(&self, host: u32) -> Vec<String> {
+        self.cfg.fence(self.cfg.shown_tab(host)).map(|f| f.items.clone()).unwrap_or_default()
+    }
+
+    /// A key pressed while the desktop is the active window (see `desktop_key` hook).
+    fn desktop_key(&mut self, key: VIRTUAL_KEY, mods: isize) {
+        self.desktop_key_inner(key, mods);
+        // Diagnostics for testing keyboard handling: set TESSERA_DEBUG_KEYS=1.
+        if std::env::var_os("TESSERA_DEBUG_KEYS").is_some() {
+            let sel = self.selected_item().map(|(h, i, k)| format!("{h}:{i} {}", k.rsplit(std::path::MAIN_SEPARATOR).next().unwrap_or(&k)));
+            log(&format!("key {:#x} mods {mods} -> {}", key.0, sel.unwrap_or_else(|| "nothing selected".into())));
+        }
+    }
+
+    fn desktop_key_inner(&mut self, key: VIRTUAL_KEY, mods: isize) {
+        let (shift, alt) = (mods & MOD_SHIFT_KEY != 0, mods & MOD_ALT_KEY != 0);
+        let ctrl = mods & MOD_CTRL_KEY != 0;
+        match key {
+            VK_LEFT | VK_RIGHT | VK_UP | VK_DOWN | VK_HOME | VK_END | VK_PRIOR | VK_NEXT => return self.navigate(key),
+            VK_ESCAPE => return self.clear_selection(),
+            VK_F5 => {
+                unsafe {
+                    SetTimer(Some(self.main), TIMER_REFRESH, 10, None);
+                }
                 return;
             }
-            self.clear_selection();
-            if let Err(e) = shell::delete(hwnd, &pidl, shift) {
-                log(&format!("delete failed: {e}"));
+            _ if ctrl && shift && key.0 == 0x4E => return self.new_folder(),
+            _ if ctrl && key.0 == 0x56 => return self.paste(),
+            _ if !ctrl && !alt && !matches!(key, VK_DELETE | VK_RETURN | VK_F2 | VK_APPS | VK_F10) => {
+                let ch = char::from_u32(key.0 as u32).unwrap_or(' ').to_ascii_lowercase();
+                return self.type_ahead(ch);
             }
+            _ => {}
+        }
+        let Some((host, index, item_key)) = self.selected_item() else { return };
+        let (Some(item), Some(hwnd)) = (self.items.get(&item_key), self.hwnd(host)) else { return };
+        let pidl = item.pidl.clone();
+        // System items (This PC, Recycle Bin, Network…) aren't files: no delete, cut or copy.
+        let is_file = !item_key.starts_with("::");
+        let verb = |verb: &str, shift: bool| {
+            if let Err(e) = shell::invoke_verb(hwnd, &pidl, verb, shift) {
+                log(&format!("{verb} failed: {e}"));
+            }
+        };
+        match key {
+            VK_RETURN if alt => verb("properties", false),
+            VK_RETURN => shell::open(hwnd, &pidl),
+            VK_DELETE if is_file => {
+                self.clear_selection();
+                verb("delete", shift);
+            }
+            VK_F2 => self.start_item_rename(host, index),
+            VK_APPS | VK_F10 => {
+                let c = self.item_screen_rect(host, index);
+                shell::take_foreground(hwnd);
+                if let Err(e) = shell::context_menu(hwnd, &pidl, POINT { x: c.x + c.w / 2, y: c.y + c.h / 2 }) {
+                    log(&format!("context menu failed: {e}"));
+                }
+            }
+            _ if ctrl && key.0 == 0x43 && is_file => verb("copy", false),
+            _ if ctrl && key.0 == 0x58 && is_file => verb("cut", false),
+            _ => {}
+        }
+    }
+
+    /// Screen rectangle of the icon cell at `index` in window `host`, as currently scrolled.
+    fn item_screen_rect(&self, host: u32, index: usize) -> Rect {
+        let (m, r) = (self.metrics(host), self.shown_rect(host));
+        let g = layout::grid(&m, r.w, self.shown_items(host).len());
+        let scroll = self.ui.get(&host).map(|u| u.scroll).unwrap_or(0);
+        let c = layout::cell_rect(&m, &g, index, scroll);
+        Rect { x: r.x + c.x, y: r.y + c.y, w: c.w, h: c.h }
+    }
+
+    /// Select `index` in window `host` and scroll it into view.
+    fn select_visible(&mut self, host: u32, index: usize) {
+        let (m, r) = (self.metrics(host), self.shown_rect(host));
+        let g = layout::grid(&m, r.w, self.shown_items(host).len());
+        let c = layout::cell_rect(&m, &g, index, 0);
+        let ui = self.ui.entry(host).or_default();
+        let (top, bottom) = (m.title_h, r.h - m.pad);
+        if c.y - ui.scroll < top {
+            ui.scroll = c.y - top;
+        } else if c.y + c.h - ui.scroll > bottom {
+            ui.scroll = c.y + c.h - bottom;
+        }
+        ui.scroll = ui.scroll.clamp(0, layout::max_scroll(&m, &g, r.h));
+        self.select(host, Some(index));
+        self.paint(host);
+    }
+
+    /// Windows that show icons, in reading order (top to bottom, then left to right).
+    fn icon_windows(&self) -> Vec<u32> {
+        let mut hosts: Vec<u32> = self.cfg.hosts().into_iter().filter(|h| self.cfg.fence(*h).is_some_and(|f| !f.collapsed) && !self.shown_items(*h).is_empty()).collect();
+        hosts.sort_by_key(|h| {
+            let r = self.shown_rect(*h);
+            (r.y / 40, r.x)
+        });
+        hosts
+    }
+
+    /// Arrow keys, Home, End, Page Up and Page Down: move through a group's grid, and at its edge
+    /// on to the nearest group in that direction, landing on the icon closest to where we were.
+    fn navigate(&mut self, key: VIRTUAL_KEY) {
+        let Some((host, index, _)) = self.selected_item() else {
+            if let Some(first) = self.icon_windows().first().copied() {
+                self.select_visible(first, 0);
+            }
+            return;
+        };
+        let n = self.shown_items(host).len();
+        let (m, r) = (self.metrics(host), self.shown_rect(host));
+        let g = layout::grid(&m, r.w, n);
+        let cols = g.cols.max(1) as usize;
+        let page = (((r.h - m.title_h - m.pad) / m.cell_h.max(1)).max(1) as usize) * cols;
+        let (col, row, rows) = (index % cols, index / cols, n.div_ceil(cols));
+        let within = match key {
+            VK_HOME => Some(0),
+            VK_END => Some(n - 1),
+            VK_PRIOR => Some(index.saturating_sub(page)),
+            VK_NEXT => Some((index + page).min(n - 1)),
+            VK_LEFT if col > 0 => Some(index - 1),
+            VK_RIGHT if col + 1 < cols && index + 1 < n => Some(index + 1),
+            VK_UP if row > 0 => Some(index - cols),
+            VK_DOWN if index + cols < n => Some(index + cols),
+            // The row below exists but is shorter: go to its last icon.
+            VK_DOWN if row + 1 < rows => Some(n - 1),
+            _ => None,
+        };
+        if let Some(i) = within {
+            return self.select_visible(host, i);
+        }
+        // At the edge: the nearest group in that direction.
+        let here = self.item_screen_rect(host, index);
+        let (hx, hy) = (here.x + here.w / 2, here.y + here.h / 2);
+        let best = self
+            .icon_windows()
+            .into_iter()
+            .filter(|h| *h != host)
+            .filter_map(|h| {
+                let o = self.shown_rect(h);
+                let (ahead, side) = match key {
+                    VK_RIGHT => (o.x - (r.x + r.w), (o.y + o.h / 2 - hy).abs()),
+                    VK_LEFT => (r.x - (o.x + o.w), (o.y + o.h / 2 - hy).abs()),
+                    VK_DOWN => (o.y - (r.y + r.h), (o.x + o.w / 2 - hx).abs()),
+                    VK_UP => (r.y - (o.y + o.h), (o.x + o.w / 2 - hx).abs()),
+                    _ => return None,
+                };
+                // Only groups that lie that way (allowing a little overlap).
+                (ahead > -40).then_some((h, ahead.max(0) + side * 2))
+            })
+            .min_by_key(|(_, score)| *score);
+        let Some((to, _)) = best else { return };
+        let count = self.shown_items(to).len();
+        let nearest = (0..count)
+            .min_by_key(|i| {
+                let c = self.item_screen_rect(to, *i);
+                let (dx, dy) = ((c.x + c.w / 2 - hx) as i64, (c.y + c.h / 2 - hy) as i64);
+                dx * dx + dy * dy
+            })
+            .unwrap_or(0);
+        self.select_visible(to, nearest);
+    }
+
+    /// Typing jumps to the next icon whose name starts with what was typed in the last second,
+    /// in this group first and then in the others, as on the desktop.
+    fn type_ahead(&mut self, ch: char) {
+        if !ch.is_alphanumeric() {
+            return;
+        }
+        let now = std::time::Instant::now();
+        let fresh = self.typeahead.1.is_none_or(|t| now.duration_since(t).as_millis() > 1000);
+        if fresh {
+            self.typeahead.0.clear();
+        }
+        self.typeahead.0.push(ch);
+        self.typeahead.1 = Some(now);
+        let prefix = self.typeahead.0.clone();
+        let name_of = |app: &App, key: &str| app.items.get(key).map(|i| i.name.to_lowercase()).unwrap_or_default();
+        let current = self.selected_item();
+        // Candidates in order: after the current icon in its group, then the other groups, then wrap.
+        let mut order: Vec<(u32, usize)> = Vec::new();
+        let windows = self.icon_windows();
+        let start = current.as_ref().and_then(|(h, _, _)| windows.iter().position(|w| w == h)).unwrap_or(0);
+        for k in 0..=windows.len() {
+            let host = windows[(start + k) % windows.len().max(1)];
+            let n = self.shown_items(host).len();
+            for i in 0..n {
+                order.push((host, i));
+            }
+        }
+        // A repeated single letter cycles; a longer prefix may stay on the current icon.
+        let skip_current = prefix.chars().count() == 1;
+        let begin = current.as_ref().and_then(|(h, i, _)| order.iter().position(|(oh, oi)| oh == h && oi == i)).map(|p| if skip_current { p + 1 } else { p }).unwrap_or(0);
+        let found = order.iter().cycle().skip(begin).take(order.len()).find(|(h, i)| {
+            let items = self.shown_items(*h);
+            items.get(*i).is_some_and(|k| name_of(self, k).starts_with(&prefix))
+        });
+        if let Some(&(h, i)) = found {
+            self.select_visible(h, i);
+        }
+    }
+
+    /// The group pasted or created files go to: the selected icon's group, else the catch-all.
+    fn target_group(&self) -> Option<u32> {
+        match self.selected_item() {
+            Some((host, _, _)) => Some(self.cfg.shown_tab(host)),
+            None => self.cfg.fences.iter().find(|f| f.inbox).map(|f| f.id),
+        }
+    }
+
+    /// Ctrl+V: files copied or cut in Explorer (or here) are pasted into the group, like a drop.
+    fn paste(&mut self) {
+        let (Some(to), Some((files, cut))) = (self.target_group(), shell::clipboard_files(self.main)) else { return };
+        if cut || self.portal_path(to).is_some() {
+            // Cut: a move, which for something already on the Desktop is just filing it here.
+            return self.drop_files(to, POINT { x: i32::MIN, y: i32::MIN }, files, cut);
+        }
+        // Copy: always a real copy, even of a Desktop item, which the shell names "… - Copy".
+        shell::transfer(files, false, None, self.main, WM_DROP_ARRIVED, to, true);
+    }
+
+    /// Ctrl+Shift+N: a new folder in the group (on the Desktop, or in a portal's folder), selected
+    /// and ready to be named as soon as it appears.
+    fn new_folder(&mut self) {
+        let Some(to) = self.target_group() else { return };
+        let dir = match self.portal_path(to) {
+            Some(p) => p,
+            None => match shell::desktop_dirs().into_iter().next() {
+                Some(d) => d,
+                None => return,
+            },
+        };
+        let base = std::path::Path::new(&dir);
+        let mut path = base.join("New folder");
+        let mut n = 2;
+        while path.exists() {
+            path = base.join(format!("New folder ({n})"));
+            n += 1;
+        }
+        if let Err(e) = std::fs::create_dir(&path) {
+            log(&format!("new folder failed: {e}"));
+            return;
+        }
+        let path = path.display().to_string();
+        if self.portal_path(to).is_none() {
+            self.expect_arrival(&path, to);
+        }
+        self.pending_rename = Some(path);
+    }
+
+    /// The new folder from Ctrl+Shift+N has appeared: select it and start renaming it.
+    fn rename_if_arrived(&mut self) {
+        let Some(path) = self.pending_rename.clone() else { return };
+        for host in self.cfg.hosts() {
+            if let Some(i) = self.shown_items(host).iter().position(|k| k.eq_ignore_ascii_case(&path)) {
+                self.pending_rename = None;
+                self.select_visible(host, i);
+                self.start_item_rename(host, i);
+                return;
+            }
+        }
+    }
+
+    /// F2: an edit box over the icon's label. Enter renames the file through the shell (hidden
+    /// extensions stay hidden, conflicts get Explorer's own dialog); Esc cancels.
+    fn start_item_rename(&mut self, host: u32, index: usize) {
+        self.finish_rename(true);
+        let Some(key) = self.shown_items(host).get(index).cloned() else { return };
+        let Some(item) = self.items.get(&key) else { return };
+        let text = shell::edit_name(&item.pidl).unwrap_or_else(|| item.name.clone());
+        let is_folder = item.is_folder;
+        let (m, cell) = (self.metrics(host), self.item_screen_rect(host, index));
+        unsafe {
+            let wide_text = wide(&text);
+            let style = WS_POPUP | WS_BORDER | WINDOW_STYLE((ES_AUTOHSCROLL | ES_CENTER) as u32);
+            let (w, h) = (cell.w + m.px(24.0), m.px(24.0));
+            let y = cell.y + m.icon + m.px(10.0);
+            let Ok(edit) = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, w!("EDIT"), PCWSTR(wide_text.as_ptr()), style, cell.x - m.px(12.0), y, w, h, None, None, Some(self.hinst), None) else { return };
+            let font = CreateFontW(-m.px(13.0), 0, 0, 0, 400, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, 0, w!("Segoe UI"));
+            SendMessageW(edit, WM_SETFONT, Some(WPARAM(font.0 as usize)), Some(LPARAM(1)));
+            // Select the name without its extension, as Explorer does.
+            let end = match text.rfind('.') {
+                Some(dot) if !is_folder && dot > 0 => text[..dot].encode_utf16().count() as isize,
+                _ => -1,
+            };
+            SendMessageW(edit, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(end)));
+            EDIT_PROC = std::mem::transmute::<isize, WNDPROC>(SetWindowLongPtrW(edit, GWLP_WNDPROC, edit_proc as *const () as isize));
+            self.rename = Some((host, edit, font));
+            self.rename_item = Some(key);
+            let _ = ShowWindow(edit, SW_SHOW);
+            shell::take_foreground(edit);
         }
     }
 
@@ -986,7 +1278,7 @@ impl App {
             // Into a portal: a plain transfer into its folder; the portal's own watcher shows the result.
             let incoming: Vec<String> = files.into_iter().filter(|f| !parent_dir(f).eq_ignore_ascii_case(&folder)).collect();
             if !incoming.is_empty() {
-                shell::transfer(incoming, move_them, Some(folder), self.main, WM_DROP_ARRIVED, 0);
+                shell::transfer(incoming, move_them, Some(folder), self.main, WM_DROP_ARRIVED, 0, false);
             }
             return;
         }
@@ -1005,7 +1297,7 @@ impl App {
         }
         if !incoming.is_empty() {
             // Each file's real destination comes back as WM_DROP_ARRIVED, then the change notification delivers the item.
-            shell::transfer(incoming, move_them, None, self.main, WM_DROP_ARRIVED, to);
+            shell::transfer(incoming, move_them, None, self.main, WM_DROP_ARRIVED, to, false);
         }
         self.paint_all();
         self.dirty();
@@ -1106,6 +1398,7 @@ impl App {
         if !unchanged {
             self.paint(listing.id);
         }
+        self.rename_if_arrived();
     }
 
     /// Point a portal at a subfolder (`Some`) or back at its own folder (`None`).
@@ -1418,6 +1711,22 @@ impl App {
             let _ = DestroyWindow(edit);
             let _ = DeleteObject(font.into());
             let text = String::from_utf16_lossy(&buf[..len]).trim().to_string();
+            // An icon's label: rename the file itself through the shell.
+            if let Some(key) = self.rename_item.take() {
+                let item = self.items.get(&key).map(|i| (i.pidl.clone(), shell::edit_name(&i.pidl).unwrap_or_else(|| i.name.clone())));
+                if let (true, Some((pidl, before)), Some(hwnd)) = (commit && !text.is_empty(), item, self.hwnd(id)) {
+                    if text != before {
+                        if let Err(e) = shell::rename(hwnd, &pidl, &text) {
+                            log(&format!("rename failed: {e}"));
+                        }
+                    }
+                }
+                // Back to the desktop, so the arrow keys carry on working, as after a rename in Explorer.
+                if let Some(desktop) = shell::desktop_host() {
+                    let _ = SetForegroundWindow(desktop);
+                }
+                return;
+            }
             if commit && !text.is_empty() {
                 if let Some(f) = self.cfg.fence_mut(id) {
                     f.title = text;
@@ -1430,6 +1739,7 @@ impl App {
 
     fn set_hidden(&mut self, hidden: bool) {
         self.hidden = hidden;
+        GROUPS_HIDDEN.store(hidden, Ordering::Relaxed);
         for (_, hwnd) in &self.wins {
             unsafe {
                 let _ = ShowWindow(*hwnd, if hidden { SW_HIDE } else { SW_SHOWNOACTIVATE });
@@ -1460,6 +1770,9 @@ impl App {
     /// included, and drops it again later. Groups must stay directly above the desktop window
     /// wherever it goes. Re-checked on foreground changes, never polled.
     fn follow_desktop(&mut self, recheck: bool) {
+        // The keyboard hook follows the desktop being the active window; the delayed re-checks
+        // below also catch a desktop that was already active when Tessera started.
+        watch_desktop_keys(self.main);
         if PEEK.load(Ordering::Relaxed) {
             return;
         }
@@ -1752,56 +2065,79 @@ unsafe extern "system" fn fence_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
 static OUTSIDE_HOOK: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
 static OUTSIDE_NOTIFY: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
 
-/// The keyboard twin of the mouse hook: while an item is selected and the desktop is the active
-/// window, Delete, Shift+Delete and Enter act on the item. Keys in any other program pass
-/// straight through.
+/// The keyboard hook: installed while the desktop is the active window, so the keys you would
+/// press on the native desktop (arrows, Delete, F2, Ctrl+C...) reach the icons in the groups.
+/// Keys typed into any other program never pass through it, because it doesn't exist then.
 static KEY_HOOK: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+/// Groups hidden with Ctrl+Alt+H: leave the keyboard to the desktop.
+static GROUPS_HIDDEN: AtomicBool = AtomicBool::new(false);
+
+/// Modifier bits sent with a key.
+const MOD_SHIFT_KEY: isize = 1;
+const MOD_CTRL_KEY: isize = 2;
+const MOD_ALT_KEY: isize = 4;
 
 fn watch_outside_clicks(main: HWND, on: bool) {
+    OUTSIDE_NOTIFY.store(main.0 as isize, Ordering::Relaxed);
+    set_hook(&OUTSIDE_HOOK, WH_MOUSE_LL, outside_click, on);
+}
+
+/// Follow the active window: keyboard hook on while it is the desktop, off otherwise.
+fn watch_desktop_keys(main: HWND) {
+    OUTSIDE_NOTIFY.store(main.0 as isize, Ordering::Relaxed);
+    set_hook(&KEY_HOOK, WH_KEYBOARD_LL, desktop_key, unsafe { desktop_is_active() });
+}
+
+fn set_hook(slot: &std::sync::atomic::AtomicIsize, kind: WINDOWS_HOOK_ID, proc_: unsafe extern "system" fn(i32, WPARAM, LPARAM) -> LRESULT, on: bool) {
+    let hook = slot.load(Ordering::Relaxed);
     unsafe {
-        let module = GetModuleHandleW(None).ok().map(HINSTANCE::from);
-        for (slot, kind, proc_) in [
-            (&OUTSIDE_HOOK, WH_MOUSE_LL, outside_click as unsafe extern "system" fn(i32, WPARAM, LPARAM) -> LRESULT),
-            (&KEY_HOOK, WH_KEYBOARD_LL, desktop_key),
-        ] {
-            let hook = slot.load(Ordering::Relaxed);
-            if on && hook == 0 {
-                OUTSIDE_NOTIFY.store(main.0 as isize, Ordering::Relaxed);
-                if let Ok(h) = SetWindowsHookExW(kind, Some(proc_), module, 0) {
-                    slot.store(h.0 as isize, Ordering::Relaxed);
-                }
-            } else if !on && hook != 0 {
-                let _ = UnhookWindowsHookEx(HHOOK(hook as *mut _));
-                slot.store(0, Ordering::Relaxed);
+        if on && hook == 0 {
+            let module = GetModuleHandleW(None).ok().map(HINSTANCE::from);
+            if let Ok(h) = SetWindowsHookExW(kind, Some(proc_), module, 0) {
+                slot.store(h.0 as isize, Ordering::Relaxed);
             }
+        } else if !on && hook != 0 {
+            let _ = UnhookWindowsHookEx(HHOOK(hook as *mut _));
+            slot.store(0, Ordering::Relaxed);
         }
     }
 }
 
-/// The desktop (or one of our own windows) is the active window: keys are meant for the icons.
+/// The desktop itself is the active window. (Not our own windows: a menu or the rename box
+/// must get its keys.)
 unsafe fn desktop_is_active() -> bool {
     let fg = GetForegroundWindow();
-    if fg.is_invalid() {
-        return true;
-    }
-    let mut pid = 0;
-    GetWindowThreadProcessId(fg, Some(&mut pid));
-    if pid == std::process::id() {
-        return true;
-    }
     let mut class = [0u16; 32];
     let n = GetClassNameW(fg, &mut class) as usize;
     matches!(String::from_utf16_lossy(&class[..n]).as_str(), "Progman" | "WorkerW")
 }
 
+/// The desktop shortcuts Tessera answers. Everything else (Ctrl+Z, Alt+F4, Win+...) is left to
+/// the desktop window as before.
+fn is_desktop_key(key: VIRTUAL_KEY, mods: isize) -> bool {
+    let (shift, ctrl, alt) = (mods & MOD_SHIFT_KEY != 0, mods & MOD_CTRL_KEY != 0, mods & MOD_ALT_KEY != 0);
+    let plain = !ctrl && !alt;
+    let letter = (0x41..=0x5A).contains(&key.0) || (0x30..=0x39).contains(&key.0);
+    match key {
+        VK_LEFT | VK_RIGHT | VK_UP | VK_DOWN | VK_HOME | VK_END | VK_PRIOR | VK_NEXT => plain,
+        VK_DELETE | VK_F2 | VK_F5 | VK_ESCAPE | VK_APPS => plain,
+        VK_RETURN => !ctrl,                 // Enter opens, Alt+Enter shows properties
+        VK_F10 => shift && plain,           // Shift+F10: the context menu
+        _ if ctrl && !alt => matches!(key.0, 0x43 | 0x58 | 0x56) && !shift || key.0 == 0x4E && shift, // Ctrl+C/X/V, Ctrl+Shift+N
+        _ => letter && plain && !shift,     // type to jump to an icon
+    }
+}
+
 unsafe extern "system" fn desktop_key(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-    if code >= 0 && matches!(wp.0 as u32, WM_KEYDOWN | WM_SYSKEYDOWN) {
+    if code >= 0 && matches!(wp.0 as u32, WM_KEYDOWN | WM_SYSKEYDOWN) && !GROUPS_HIDDEN.load(Ordering::Relaxed) {
         let info = &*(lp.0 as *const KBDLLHOOKSTRUCT);
         let key = VIRTUAL_KEY(info.vkCode as u16);
-        if (key == VK_DELETE || key == VK_RETURN) && desktop_is_active() {
-            let shift = GetAsyncKeyState(VK_SHIFT.0 as i32) < 0;
+        let down = |k: VIRTUAL_KEY| GetAsyncKeyState(k.0 as i32) < 0;
+        let win = down(VK_LWIN) || down(VK_RWIN);
+        let mods = (down(VK_SHIFT) as isize * MOD_SHIFT_KEY) | (down(VK_CONTROL) as isize * MOD_CTRL_KEY) | ((info.flags.0 & 0x20 != 0) as isize * MOD_ALT_KEY);
+        if !win && is_desktop_key(key, mods) && desktop_is_active() {
             let main = HWND(OUTSIDE_NOTIFY.load(Ordering::Relaxed) as *mut _);
-            let _ = PostMessageW(Some(main), WM_ITEM_KEY, WPARAM(key.0 as usize), LPARAM(shift as isize));
+            let _ = PostMessageW(Some(main), WM_ITEM_KEY, WPARAM(key.0 as usize), LPARAM(mods));
             return LRESULT(1); // handled: the desktop window doesn't also get it
         }
     }
@@ -1825,6 +2161,7 @@ unsafe extern "system" fn outside_click(code: i32, wp: WPARAM, lp: LPARAM) -> LR
 unsafe extern "system" fn foreground_changed(_: HWINEVENTHOOK, _: u32, _: HWND, _: i32, _: i32, _: u32, _: u32) {
     if let Some(app) = app() {
         app.follow_desktop(true);
+        watch_desktop_keys(app.main);
     }
 }
 
@@ -1855,7 +2192,7 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
         },
         WM_OPEN_SETTINGS => app.open_settings(),
         WM_CLICK_OUTSIDE => app.clear_selection(),
-        WM_ITEM_KEY => app.item_key(VIRTUAL_KEY(wp.0 as u16), lp.0 != 0),
+        WM_ITEM_KEY => app.desktop_key(VIRTUAL_KEY(wp.0 as u16), lp.0),
         WM_COPYDATA => {
             let data = &*(lp.0 as *const COPYDATASTRUCT);
             if data.dwData != COPYDATA_MAGIC || data.lpData.is_null() {
@@ -2038,6 +2375,9 @@ unsafe fn run() -> Result<()> {
         tray_icon,
         repaint: HashSet::new(),
         rename: None,
+        rename_item: None,
+        pending_rename: None,
+        typeahead: (String::new(), None),
         own_drag: None,
         pending_drops: HashMap::new(),
         desktop_dirs: shell::desktop_dirs(),
