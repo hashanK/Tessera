@@ -97,6 +97,7 @@ Checked by driving the real app on Windows 11 build 26300 with synthetic mouse a
 | Peek hotkey | Verified |
 | Clean exit restores Explorer's icons; `--restore` after a hard kill | Verified |
 | Zero CPU while idle | Verified (0.0 ms over 15 s) |
+| Selection clears when you click the bare desktop, another program, an empty spot or a title bar (as on the native desktop) | Verified |
 | Materials on the desktop: acrylic, frosted glass, Mica, gradient, solid paper with grain; blurred wallpaper, rounded corners, top highlight | Verified (screenshots) |
 | Typography and icon looks on the desktop: another font, letter spacing, labels beside icons, centred bold title, circular icon backgrounds, reduced icon colour | Verified (screenshots) |
 | Appearance editor: opens for a group, live preview on the desktop while editing, Cancel restores the group, Apply keeps the look | Verified (driven through the WebView2 DevTools protocol, not by mouse) |

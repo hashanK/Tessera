@@ -114,6 +114,10 @@ A group lists other groups in `tabs` and remembers which one is in front (`activ
 **Settings.** The editor previews in HTML, using the same colour and size rules as the renderer and the real wallpaper for wallpaper materials. While "On the desktop" is on, the draft is also sent to the organiser as a `look` command at most every 60 ms. Those messages are marked quiet, so the page isn't redrawn under the slider. Cancel sends the original style back.
 *Limits:* the backdrop is the wallpaper, not whatever is really behind a group, so a group over another group shows the wallpaper; animated wallpapers appear frozen; a wallpaper slideshow may not be noticed until the next display change. With multiple monitors the capture covers the window Explorer paints all wallpapers in (not yet tested). *Motion* (added later): hover and selection animate per item (0..1 progress with easing, plus a one-off ripple or bounce on selection). A 15 ms frame timer runs only while something is moving and re-arms itself frame by frame, so a hover costs about a fifth of a second of repaints and then nothing. Motion is off when Windows "Animation effects" is off and in low-effects mode.
 
+### ADR-17 — A mouse hook only while something is selected
+Clicking the bare desktop must clear the selection, as it does on the native desktop, but Windows tells no one else about a click on the desktop window. So while an item is selected, and only then, Tessera installs a low-level mouse hook (`WH_MOUSE_LL`). Its callback only posts a message when a button goes down over a window of another process. The selection then clears and the hook is removed. With nothing selected, there is no hook.
+*Rejected:* a permanent hook (system-wide cost for a rare event), and the foreground-change event, which doesn't fire when the desktop was already in front.
+
 ## Recovery behaviour
 
 | Event | Behaviour |

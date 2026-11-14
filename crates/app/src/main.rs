@@ -40,6 +40,8 @@ const WM_PORTAL_READY: u32 = WM_APP + 5;
 const WM_PICK_PORTAL: u32 = WM_APP + 6;
 /// Sent by a second launch of tessera.exe: the user opened Tessera while it was already running.
 const WM_OPEN_SETTINGS: u32 = WM_APP + 7;
+/// A click landed outside every group while an item was selected.
+const WM_CLICK_OUTSIDE: u32 = WM_APP + 8;
 /// Hotkey ids HOTKEY_PROFILE+1 ..= +9 switch to the first nine profiles (Ctrl+Alt+Shift+digit).
 const HOTKEY_PROFILE: i32 = 10;
 
@@ -698,6 +700,7 @@ impl App {
         }
     }
 
+    /// Select one item (or none). Only one item is selected across all groups.
     fn select(&mut self, id: u32, index: Option<usize>) {
         let id = self.cfg.tab_host(id);
         for other in self.wins.iter().map(|w| w.0).collect::<Vec<_>>() {
@@ -708,6 +711,13 @@ impl App {
                 self.paint(other);
             }
         }
+        watch_outside_clicks(self.main, index.is_some());
+    }
+
+    /// The user clicked somewhere that isn't a group (the bare desktop, another program): like
+    /// on the native desktop, nothing stays selected.
+    fn clear_selection(&mut self) {
+        self.select(0, None);
     }
 
     // ------------------------------------------------------------ pointer input
@@ -715,7 +725,11 @@ impl App {
     fn mouse_down(&mut self, id: u32, hwnd: HWND, x: i32, y: i32) {
         self.finish_rename(true);
         let pt = cursor();
-        self.drag = match self.zone(id, x, y) {
+        let zone = self.zone(id, x, y);
+        if !matches!(zone, Zone::Item(_)) {
+            self.clear_selection();
+        }
+        self.drag = match zone {
             Zone::Edge(edges) => Drag::Resize { id, edges, start: self.cfg.fence(id).map(|f| f.rect).unwrap_or_default(), px: pt.x, py: pt.y },
             Zone::Title => Drag::Move { id, dx: x, dy: y },
             // A tab comes forward on press; dragging from it still moves the group.
@@ -731,10 +745,7 @@ impl App {
                 self.select(id, Some(index));
                 Drag::Pending { id, index, px: pt.x, py: pt.y }
             }
-            Zone::Body => {
-                self.select(id, None);
-                Drag::None
-            }
+            Zone::Body => Drag::None,
         };
         if !matches!(self.drag, Drag::None) {
             unsafe {
@@ -1706,6 +1717,42 @@ unsafe extern "system" fn fence_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
     LRESULT(0)
 }
 
+/// The low-level mouse hook that notices clicks outside the groups. It exists only while an
+/// item is selected (its only job is to end the selection), so a desktop with nothing selected
+/// has no hook at all. The callback does nothing but post a message.
+static OUTSIDE_HOOK: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+static OUTSIDE_NOTIFY: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+
+fn watch_outside_clicks(main: HWND, on: bool) {
+    let hook = OUTSIDE_HOOK.load(Ordering::Relaxed);
+    unsafe {
+        if on && hook == 0 {
+            OUTSIDE_NOTIFY.store(main.0 as isize, Ordering::Relaxed);
+            let module = GetModuleHandleW(None).ok().map(HINSTANCE::from);
+            if let Ok(h) = SetWindowsHookExW(WH_MOUSE_LL, Some(outside_click), module, 0) {
+                OUTSIDE_HOOK.store(h.0 as isize, Ordering::Relaxed);
+            }
+        } else if !on && hook != 0 {
+            let _ = UnhookWindowsHookEx(HHOOK(hook as *mut _));
+            OUTSIDE_HOOK.store(0, Ordering::Relaxed);
+        }
+    }
+}
+
+unsafe extern "system" fn outside_click(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    if code >= 0 && matches!(wp.0 as u32, WM_LBUTTONDOWN | WM_RBUTTONDOWN | WM_MBUTTONDOWN) {
+        let info = &*(lp.0 as *const MSLLHOOKSTRUCT);
+        let mut pid = 0;
+        GetWindowThreadProcessId(WindowFromPoint(info.pt), Some(&mut pid));
+        // Our own windows (groups, menus, the rename box) handle their clicks themselves.
+        if pid != std::process::id() {
+            let main = HWND(OUTSIDE_NOTIFY.load(Ordering::Relaxed) as *mut _);
+            let _ = PostMessageW(Some(main), WM_CLICK_OUTSIDE, WPARAM(0), LPARAM(0));
+        }
+    }
+    CallNextHookEx(None, code, wp, lp)
+}
+
 unsafe extern "system" fn foreground_changed(_: HWINEVENTHOOK, _: u32, _: HWND, _: i32, _: i32, _: u32, _: u32) {
     if let Some(app) = app() {
         app.follow_desktop(true);
@@ -1738,6 +1785,7 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
             _ => {}
         },
         WM_OPEN_SETTINGS => app.open_settings(),
+        WM_CLICK_OUTSIDE => app.clear_selection(),
         WM_COPYDATA => {
             let data = &*(lp.0 as *const COPYDATASTRUCT);
             if data.dwData != COPYDATA_MAGIC || data.lpData.is_null() {
