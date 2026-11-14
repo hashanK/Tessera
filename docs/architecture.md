@@ -120,6 +120,16 @@ Clicking the bare desktop must clear the selection, as it does on the native des
 *Keys:* a keyboard hook (`WH_KEYBOARD_LL`) exists only while the desktop itself is the active window. It is switched on and off by the foreground-change event and re-checked with the existing desktop z-order checks, which also covers a desktop that was already active at start-up. It answers only the native desktop's own shortcuts (arrows, Home, End, Page Up/Down, typing to find, Enter, Alt+Enter, F2, F5, Esc, Delete, Shift+Delete, Shift+F10, Menu, Ctrl+C/X/V, Ctrl+Shift+N), passes everything else (Ctrl+Z, Alt+F4, Win+…) through, and never acts while a menu, the rename box or another program is active. File actions use the item's own shell verbs (`delete`, `copy`, `cut`, `properties`), `IShellFolder::SetNameOf` for renames (hidden extensions stay hidden) and `IFileOperation` with rename-on-collision for paste, as Explorer does. Clicking an icon makes the desktop the active window, as clicking the native desktop does. Setting `TESSERA_DEBUG_KEYS=1` logs each key and the resulting selection.
 *Limit:* Windows keeps undo per program, so Ctrl+Z on the desktop doesn't undo a delete, rename or paste made through Tessera.
 
+### ADR-18 — Multi-select within one group
+Each window keeps a set of selected positions, an anchor (where a Shift range starts) and a focus (what F2 and the arrows act on). Only one window has a selection at a time, as on the native desktop, where there is one view: selecting in another group starts afresh. Clicks follow Explorer. Ctrl toggles; Shift ranges from the anchor; Ctrl+Shift adds a range; a plain click on an icon that is already selected keeps the selection until the button comes up, so the whole selection can be dragged, and a following double-click opens them all.
+*Acting on several:* items on the desktop often live in two folders, the user's Desktop and the Public Desktop, and shell context menus need one parent folder. So, for several items:
+- deleting uses one `IFileOperation` (one confirmation and one progress window);
+- Copy and Cut put a file list plus "Preferred DropEffect" on the clipboard, as Explorer does;
+- dragging uses the parent folder's own data object when they share a folder, otherwise one built from absolute ids;
+- the right-click menu and Properties use the combined shell menu when the items share a folder, otherwise they fall back to the focused item.
+Dropping several of our own icons on a group regroups them in their on-screen order.
+*Not built:* rubber-band selection; a selection spanning groups.
+
 ## Recovery behaviour
 
 | Event | Behaviour |

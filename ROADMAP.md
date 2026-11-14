@@ -21,7 +21,8 @@ See the status table in `README.md`, which is kept in step with the code.
 - ⬜ Roll-up and move animations
 - ⬜ Themed rename box and menus (currently stock Win32 controls)
 - ✅ Desktop keyboard shortcuts: arrows, type-to-find, Enter, F2, Delete, Ctrl+C/X/V, Ctrl+Shift+N, Alt+Enter, Shift+F10, F5, Esc
-- ⬜ Multi-select (Ctrl/Shift+click, Ctrl+A, Shift+arrows) and undo for Tessera's own file operations
+- ✅ Multi-select: Ctrl/Shift+click, Ctrl+A, Shift+arrows; drag, delete, copy, cut, open, menu and Properties on all
+- ⬜ Rubber-band selection, selection across groups, undo for Tessera's own file operations
 - ⬜ Refresh icons when a shortcut's icon changes
 
 ## Phase 5 — Optimisation

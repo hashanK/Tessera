@@ -46,6 +46,7 @@ This builds two programs that must sit in the same folder: `tessera.exe` (the or
 | Drop a link from a browser onto a group | Create an Internet shortcut on the Desktop, filed in that group |
 | Drop onto a folder or the Recycle Bin inside a group | Same as on the native desktop: move into the folder, or delete. Aim at the middle of the icon; the gaps between icons reorder |
 | Double-click / right-click an icon | Open it / the real Explorer context menu |
+| Ctrl+click, Shift+click, Ctrl+Shift+click; Ctrl+A; Shift+arrows | Select several icons in a group (toggle, range, add a range; all; extend). Dragging, deleting, copying, cutting, opening, the right-click menu and Alt+Enter then act on all of them |
 | Keyboard, while the desktop is the active window (click an icon or the desktop) | Arrow keys, Home, End, Page Up/Down move between icons and on to the next group; typing jumps to an icon by name; Enter opens; F2 renames the file; Delete / Shift+Delete delete it (Recycle Bin / permanently); Ctrl+C, Ctrl+X, Ctrl+V copy, cut and paste files (pasted files land in the selected group); Ctrl+Shift+N makes a new folder in the group and starts renaming it; Alt+Enter shows Properties; Shift+F10 or the Menu key opens the right-click menu; F5 refreshes; Esc deselects |
 | Mouse wheel | Scroll a group that overflows |
 | Tray icon → New folder portal… (or a group's right-click menu, or Settings) | Add a group that shows a folder's contents live. Double-click a subfolder to browse into it; the ‹ in the title goes back |
@@ -103,6 +104,8 @@ Checked by driving the real app on Windows 11 build 26300 with synthetic mouse a
 | Groups appear when Tessera starts while the desktop is in front (Show Desktop) | Verified |
 | Keyboard: arrows within a group and across to the next group, Home, End, type-to-find (and repeating a letter to cycle), F2 rename (file renamed, stays in its group), Ctrl+C then Ctrl+V (a \"- Copy\" in the same group), Ctrl+Shift+N (new folder, renamed in place), Alt+Enter, Shift+F10, Esc; keys are refused while another program is active; works when Tessera starts with the desktop already active | Verified (keys sent only after checking the active window; results checked on disk and in a diagnostic log) |
 | Keyboard: Page Up/Down, Ctrl+X, Shift+Delete, Enter, F5, the Menu key, paste into a portal | Implemented, not exercised |
+| Multi-select: Ctrl+click toggles, Shift+click ranges, Ctrl+Shift+click adds a range, a plain click on a selected icon reduces to it, Ctrl+A, Shift+arrows and Shift+End; dragging two icons into another group together; copy and paste of two folders; deleting five folders at once to the Recycle Bin; the combined right-click menu and Properties sheet; keyboard focus returns to the desktop after an icon menu | Verified (deletes guarded: every selected name checked first) |
+| Multi-select: dragging several icons out to Explorer, cutting several, double-clicking a selection to open all | Implemented, not exercised |
 | Materials on the desktop: acrylic, frosted glass, Mica, gradient, solid paper with grain; blurred wallpaper, rounded corners, top highlight | Verified (screenshots) |
 | Typography and icon looks on the desktop: another font, letter spacing, labels beside icons, centred bold title, circular icon backgrounds, reduced icon colour | Verified (screenshots) |
 | Appearance editor: opens for a group, live preview on the desktop while editing, Cancel restores the group, Apply keeps the look | Verified (driven through the WebView2 DevTools protocol, not by mouse) |
@@ -136,7 +139,7 @@ Checked by driving the real app on Windows 11 build 26300 with synthetic mouse a
 | Explorer-restart recovery, display-change layout restore | Implemented, not tested |
 | Multi-monitor, non-100 % DPI | Implemented, not tested (single 1080p monitor available) |
 
-Not built yet: selecting several icons at once (Ctrl/Shift+click, Ctrl+A), configurable hotkeys, switching profile automatically (by display or running app), dropping plain text or images, dropping onto an app icon to open with it, search, rule editor, Ctrl+Z for operations done through Tessera. See [ROADMAP.md](ROADMAP.md).
+Not built yet: rubber-band (drag a box) selection, a selection spanning several groups, configurable hotkeys, switching profile automatically (by display or running app), dropping plain text or images, dropping onto an app icon to open with it, search, rule editor, Ctrl+Z for operations done through Tessera. See [ROADMAP.md](ROADMAP.md).
 
 ## Known limitations
 

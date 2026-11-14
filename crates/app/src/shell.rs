@@ -8,8 +8,8 @@ use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::System::Com::*;
-use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard, RegisterClipboardFormatW};
-use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, RegisterClipboardFormatW, SetClipboardData};
+use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
 use windows::Win32::System::Ole::{IDropSource, IDropTarget, CF_HDROP, DROPEFFECT_COPY, DROPEFFECT_LINK, DROPEFFECT_MOVE};
 use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use windows::Win32::UI::Input::KeyboardAndMouse::SetFocus;
@@ -467,6 +467,145 @@ pub fn invoke_verb(hwnd: HWND, pidl: &Pidl, verb: &str, shift: bool) -> Result<(
         let result = menu.InvokeCommand(&info as *const _ as *const CMINVOKECOMMANDINFO);
         let _ = DestroyMenu(popup);
         result
+    }
+}
+
+/// Several items' shared parent folder and their ids within it, if they all live in one folder.
+/// (A desktop selection can mix the user's and the Public Desktop.)
+unsafe fn common_parent(pidls: &[Pidl]) -> Option<(IShellFolder, Vec<*const ITEMIDLIST>)> {
+    let mut parent: Option<(IShellFolder, String)> = None;
+    let mut children = Vec::new();
+    for pidl in pidls {
+        let mut child = std::ptr::null_mut();
+        let folder: IShellFolder = SHBindToParent(pidl.as_ptr(), Some(&mut child)).ok()?;
+        // Compare parents by the parsing name of the parent folder.
+        let full = display_name(&SHGetDesktopFolder().ok()?, pidl.as_ptr(), SHGDN_FORPARSING);
+        let name = full.rsplit_once('\\').map(|(p, _)| p.to_lowercase()).unwrap_or_default();
+        match &parent {
+            Some((_, n)) if *n != name => return None,
+            Some(_) => {}
+            None => parent = Some((folder, name)),
+        }
+        children.push(child as *const ITEMIDLIST);
+    }
+    parent.map(|(f, _)| (f, children))
+}
+
+/// Several items' data object: the parent folder's own when they share one, otherwise one built
+/// from their absolute ids (which Explorer and other programs accept just the same).
+unsafe fn data_object(hwnd: HWND, pidls: &[Pidl]) -> Result<IDataObject> {
+    if let Some((parent, children)) = common_parent(pidls) {
+        return parent.GetUIObjectOf(hwnd, &children, None);
+    }
+    let absolute: Vec<*const ITEMIDLIST> = pidls.iter().map(|p| p.as_ptr()).collect();
+    SHCreateDataObject(None, Some(&absolute), None)
+}
+
+/// Drag several items at once (see `drag_out`).
+pub fn drag_out_many(hwnd: HWND, pidls: &[Pidl]) -> Result<()> {
+    unsafe {
+        let data = data_object(hwnd, pidls)?;
+        SHDoDragDrop(Some(hwnd), &data, None::<&IDropSource>, DROPEFFECT_COPY | DROPEFFECT_MOVE | DROPEFFECT_LINK)?;
+        Ok(())
+    }
+}
+
+/// The right-click menu for several items, or a verb run on all of them ("properties" shows
+/// the combined Properties sheet). Needs a shared folder; returns false if they don't share one.
+pub fn menu_many(hwnd: HWND, pidls: &[Pidl], pt: Option<POINT>, verb: Option<&str>) -> bool {
+    unsafe {
+        let Some((parent, children)) = common_parent(pidls) else { return false };
+        let Ok(menu) = parent.GetUIObjectOf::<IContextMenu>(hwnd, &children, None) else { return false };
+        let Ok(popup) = CreatePopupMenu() else { return false };
+        let _ = menu.QueryContextMenu(popup, 0, 1, 0x7FFF, CMF_NORMAL);
+        let (ansi, wide): (Vec<u8>, Vec<u16>) = match verb {
+            Some(v) => (v.bytes().chain([0]).collect(), v.encode_utf16().chain([0]).collect()),
+            None => (Vec::new(), Vec::new()),
+        };
+        let pt = pt.unwrap_or_default();
+        let cmd = match verb {
+            Some(_) => Some((PCSTR(ansi.as_ptr()), PCWSTR(wide.as_ptr()))),
+            None => {
+                ACTIVE_MENU.with(|m| *m.borrow_mut() = menu.cast().ok());
+                let _ = SetForegroundWindow(hwnd);
+                let chosen = TrackPopupMenuEx(popup, (TPM_RETURNCMD | TPM_RIGHTBUTTON).0, pt.x, pt.y, hwnd, None).0;
+                ACTIVE_MENU.with(|m| *m.borrow_mut() = None);
+                (chosen > 0).then(|| (PCSTR((chosen - 1) as usize as *const u8), PCWSTR((chosen - 1) as usize as *const u16)))
+            }
+        };
+        if let Some((a, w)) = cmd {
+            let info = CMINVOKECOMMANDINFOEX {
+                cbSize: std::mem::size_of::<CMINVOKECOMMANDINFOEX>() as u32,
+                fMask: 0x4000 | 0x2000_0000, // CMIC_MASK_UNICODE | CMIC_MASK_PTINVOKE
+                hwnd,
+                lpVerb: a,
+                lpVerbW: w,
+                nShow: SW_SHOWNORMAL.0,
+                ptInvoke: pt,
+                ..Default::default()
+            };
+            if let Err(e) = menu.InvokeCommand(&info as *const _ as *const CMINVOKECOMMANDINFO) {
+                crate::log(&format!("menu command failed: {e}"));
+            }
+        }
+        let _ = DestroyMenu(popup);
+        true
+    }
+}
+
+/// Delete several items in one operation (one confirmation, one progress window, as Explorer
+/// does): to the Recycle Bin, or permanently. Runs on its own thread.
+pub fn delete_many(files: Vec<String>, permanent: bool) {
+    std::thread::spawn(move || unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let run = || -> Result<()> {
+            let op: IFileOperation = CoCreateInstance(&FileOperation, None, CLSCTX_ALL)?;
+            // FOF_ALLOWUNDO | FOFX_RECYCLEONDELETE sends to the Recycle Bin; without them it is permanent.
+            op.SetOperationFlags(if permanent { FILEOPERATION_FLAGS(0) } else { FILEOPERATION_FLAGS(FOF_ALLOWUNDO.0 | 0x0008_0000) })?;
+            for file in &files {
+                let item: IShellItem = SHCreateItemFromParsingName(&HSTRING::from(file.as_str()), None)?;
+                op.DeleteItem(&item, None)?;
+            }
+            op.PerformOperations()
+        };
+        if let Err(e) = run() {
+            crate::log(&format!("delete failed: {e}"));
+        }
+        CoUninitialize();
+    });
+}
+
+/// Put files on the clipboard as Explorer's Copy or Cut does: a file list plus the
+/// "Preferred DropEffect" that tells the paste whether to move them.
+pub fn set_clipboard_files(owner: HWND, files: &[String], cut: bool) -> bool {
+    unsafe {
+        // DROPFILES header (20 bytes, wide names) followed by the names, double-null terminated.
+        let names: Vec<u16> = files.iter().flat_map(|f| f.encode_utf16().chain([0])).chain([0]).collect();
+        let size = 20 + names.len() * 2;
+        let Ok(list) = GlobalAlloc(GMEM_MOVEABLE, size) else { return false };
+        let p = GlobalLock(list) as *mut u8;
+        if p.is_null() {
+            return false;
+        }
+        std::ptr::write_bytes(p, 0, 20);
+        *(p as *mut u32) = 20; // pFiles
+        *(p.add(16) as *mut u32) = 1; // fWide
+        std::ptr::copy_nonoverlapping(names.as_ptr() as *const u8, p.add(20), names.len() * 2);
+        let _ = GlobalUnlock(list);
+        let Ok(effect) = GlobalAlloc(GMEM_MOVEABLE, 4) else { return false };
+        let e = GlobalLock(effect) as *mut u32;
+        if !e.is_null() {
+            *e = if cut { 2 } else { 5 }; // DROPEFFECT_MOVE, or DROPEFFECT_COPY | DROPEFFECT_LINK
+            let _ = GlobalUnlock(effect);
+        }
+        if OpenClipboard(Some(owner)).is_err() {
+            return false;
+        }
+        let _ = EmptyClipboard();
+        let ok = SetClipboardData(CF_HDROP.0 as u32, Some(HANDLE(list.0))).is_ok();
+        let _ = SetClipboardData(RegisterClipboardFormatW(w!("Preferred DropEffect")), Some(HANDLE(effect.0)));
+        let _ = CloseClipboard();
+        ok
     }
 }
 

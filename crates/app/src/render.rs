@@ -38,7 +38,8 @@ pub struct FenceView<'a> {
     pub items: Vec<ItemView<'a>>,
     pub scroll: i32,
     pub hover: Option<usize>,
-    pub selected: Option<usize>,
+    /// Selected items, by position.
+    pub selected: Vec<usize>,
     pub insert: Option<usize>,
     /// Pointer is over the group: show secondary chrome.
     pub hot: bool,
@@ -741,7 +742,7 @@ impl Renderer {
                 // Animation progress: hover and selection 0..1, burst 0..1 (1 = none running).
                 let (h_raw, s_raw, burst) = v.anim.get(&i).copied().unwrap_or((
                     if v.hover == Some(i) { 1.0 } else { 0.0 },
-                    if v.selected == Some(i) { 1.0 } else { 0.0 },
+                    if v.selected.contains(&i) { 1.0 } else { 0.0 },
                     1.0,
                 ));
                 let (hv, sv) = (ease(h_raw), ease(s_raw));

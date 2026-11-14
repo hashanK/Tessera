@@ -10,7 +10,7 @@ mod render;
 mod shell;
 
 use render::{FenceView, ItemView, Renderer};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
@@ -83,7 +83,12 @@ fn app() -> Option<&'static mut App> {
 struct Ui {
     scroll: i32,
     hover: Option<usize>,
-    selected: Option<usize>,
+    /// Selected items, by position in the tab on screen. Only one window has a selection at a time.
+    selected: BTreeSet<usize>,
+    /// Where a Shift+click or Shift+arrow range starts.
+    anchor: Option<usize>,
+    /// The item the keyboard acts on (F2, arrows), normally the last one clicked.
+    focus: Option<usize>,
     insert: Option<usize>,
     hot: bool,
     tracking: bool,
@@ -96,8 +101,8 @@ struct Ui {
     margin: i32,
     /// Hover and selection animations in progress, by item position.
     anim: HashMap<usize, Anim>,
-    /// The selection as of the last paint, to notice a new one.
-    last_selected: Option<usize>,
+    /// The selection as of the last paint, to notice newly selected items.
+    last_selected: BTreeSet<usize>,
 }
 
 /// Progress of one item's hover and selection animations, each 0..1, and of the one-off
@@ -115,24 +120,24 @@ struct Anim {
 /// a new selection. Without motion (or with animations off) everything snaps to its target.
 /// Returns whether anything still has to move.
 fn step_targets(ui: &mut Ui, hover: HoverMotion, select: SelectMotion, allowed: bool) -> bool {
-    let (hovered, selected) = (ui.hover, ui.selected);
-    let fresh = selected.filter(|s| ui.last_selected != Some(*s));
-    ui.last_selected = selected;
+    let (hovered, selected) = (ui.hover, ui.selected.clone());
+    let fresh: BTreeSet<usize> = selected.difference(&ui.last_selected).copied().collect();
+    ui.last_selected = selected.clone();
     let mut keys: Vec<usize> = ui.anim.keys().copied().collect();
     keys.extend(hovered);
-    keys.extend(selected);
+    keys.extend(selected.iter().copied());
     let mut moving = false;
     for i in keys {
         let a = ui.anim.entry(i).or_insert(Anim { hover: 0.0, hover_to: 0.0, select: 0.0, select_to: 0.0, burst: 1.0 });
         a.hover_to = if hovered == Some(i) { 1.0 } else { 0.0 };
-        a.select_to = if selected == Some(i) { 1.0 } else { 0.0 };
+        a.select_to = if selected.contains(&i) { 1.0 } else { 0.0 };
         if !allowed || hover == HoverMotion::None {
             a.hover = a.hover_to;
         }
         if !allowed || select == SelectMotion::None {
             a.select = a.select_to;
         }
-        if fresh == Some(i) && allowed && select.burst_seconds() > 0.0 {
+        if fresh.contains(&i) && allowed && select.burst_seconds() > 0.0 {
             a.burst = 0.0;
         }
         if !allowed {
@@ -203,7 +208,11 @@ struct App {
     /// Letters typed to jump to an icon, and when the last one came.
     typeahead: (String, Option<std::time::Instant>),
     /// (source group, item key) while one of our own icons is in an OLE drag.
-    own_drag: Option<(u32, String)>,
+    own_drag: Option<(u32, Vec<String>)>,
+    /// A plain click on a member of a multiple selection: reduce to that icon unless it becomes a drag.
+    collapse_on_up: Option<(u32, usize)>,
+    /// The selection a click just reduced to one icon, and when.
+    collapsed_from: Option<(u32, BTreeSet<usize>, std::time::Instant)>,
     /// Files being brought onto the desktop by a drop: lower-cased destination path -> group to file it in.
     pending_drops: HashMap<String, u32>,
     desktop_dirs: Vec<String>,
@@ -433,7 +442,7 @@ impl App {
             items: fence.items.iter().map(|k| ItemView { key: k, name: self.items.get(k).map(|i| i.name.as_str()).unwrap_or("") }).collect(),
             scroll: ui.scroll,
             hover: ui.hover,
-            selected: ui.selected,
+            selected: ui.selected.iter().copied().collect(),
             insert: ui.insert,
             hot: ui.hot,
             tabs: if order.len() > 1 { order.iter().filter_map(|t| self.cfg.fence(*t).map(|f| f.title.as_str())).collect() } else { Vec::new() },
@@ -468,7 +477,8 @@ impl App {
         let host = self.cfg.tab_host(id);
         let ui = self.ui.entry(host).or_default();
         let was_browsing = ui.nav.take().is_some();
-        (ui.scroll, ui.hover, ui.selected, ui.insert) = (0, None, None, None);
+        (ui.scroll, ui.hover, ui.insert) = (0, None, None);
+        (ui.selected, ui.anchor, ui.focus) = (BTreeSet::new(), None, None);
         if was_browsing {
             // The tab we left was browsed into a subfolder; it starts from its own folder next time.
             self.refresh_portals(Some(before));
@@ -710,24 +720,46 @@ impl App {
         }
     }
 
-    /// Select one item (or none). Only one item is selected across all groups.
+    /// Select one item (or none). Only one window has a selection at a time.
     fn select(&mut self, id: u32, index: Option<usize>) {
+        let set: BTreeSet<usize> = index.into_iter().collect();
+        self.select_set(id, set, index, index);
+    }
+
+    /// Replace the selection: `set` in window `id`, nothing anywhere else.
+    fn select_set(&mut self, id: u32, set: BTreeSet<usize>, focus: Option<usize>, anchor: Option<usize>) {
         let id = self.cfg.tab_host(id);
+        let any = !set.is_empty();
         for other in self.wins.iter().map(|w| w.0).collect::<Vec<_>>() {
-            let want = if other == id { index } else { None };
             let ui = self.ui.entry(other).or_default();
+            let (want, f, a) = if other == id { (set.clone(), focus, anchor) } else { (BTreeSet::new(), None, None) };
+            ui.focus = f;
+            ui.anchor = a;
             if ui.selected != want {
                 ui.selected = want;
                 self.paint(other);
             }
         }
-        watch_outside_clicks(self.main, index.is_some());
+        watch_outside_clicks(self.main, any);
+    }
+
+    /// The window with a selection, and the selected positions.
+    fn selection(&self) -> Option<(u32, BTreeSet<usize>)> {
+        self.ui.iter().find(|(_, ui)| !ui.selected.is_empty()).map(|(id, ui)| (*id, ui.selected.clone()))
+    }
+
+    /// The selected items' keys and shell ids, in on-screen order.
+    fn selected_items(&self) -> Vec<(String, shell::Pidl)> {
+        let Some((host, set)) = self.selection() else { return Vec::new() };
+        let items = self.shown_items(host);
+        set.iter().filter_map(|i| items.get(*i)).filter_map(|k| self.items.get(k).map(|it| (k.clone(), it.pidl.clone()))).collect()
     }
 
     /// Delete / Shift+Delete / Enter pressed on the desktop while an item is selected.
     /// The selected item: (window, position in the tab on screen, item key).
+    /// The item the keyboard acts on: the focused one if it is selected, else the first selected.
     fn selected_item(&self) -> Option<(u32, usize, String)> {
-        let (host, index) = self.ui.iter().find_map(|(id, ui)| ui.selected.map(|i| (*id, i)))?;
+        let (host, index) = self.ui.iter().find_map(|(id, ui)| ui.focus.filter(|f| ui.selected.contains(f)).or_else(|| ui.selected.iter().next().copied()).map(|i| (*id, i)))?;
         let key = self.cfg.fence(self.cfg.shown_tab(host))?.items.get(index)?.clone();
         Some((host, index, key))
     }
@@ -743,7 +775,8 @@ impl App {
         // Diagnostics for testing keyboard handling: set TESSERA_DEBUG_KEYS=1.
         if std::env::var_os("TESSERA_DEBUG_KEYS").is_some() {
             let sel = self.selected_item().map(|(h, i, k)| format!("{h}:{i} {}", k.rsplit(std::path::MAIN_SEPARATOR).next().unwrap_or(&k)));
-            log(&format!("key {:#x} mods {mods} -> {}", key.0, sel.unwrap_or_else(|| "nothing selected".into())));
+            let all = self.selection().map(|(h, set)| format!(" | selected in {h}: {set:?}")).unwrap_or_default();
+            log(&format!("key {:#x} mods {mods} -> {}{all}", key.0, sel.unwrap_or_else(|| "nothing selected".into())));
         }
     }
 
@@ -751,7 +784,8 @@ impl App {
         let (shift, alt) = (mods & MOD_SHIFT_KEY != 0, mods & MOD_ALT_KEY != 0);
         let ctrl = mods & MOD_CTRL_KEY != 0;
         match key {
-            VK_LEFT | VK_RIGHT | VK_UP | VK_DOWN | VK_HOME | VK_END | VK_PRIOR | VK_NEXT => return self.navigate(key),
+            VK_LEFT | VK_RIGHT | VK_UP | VK_DOWN | VK_HOME | VK_END | VK_PRIOR | VK_NEXT => return self.navigate(key, shift),
+            _ if ctrl && !shift && key.0 == 0x41 => return self.select_all(),
             VK_ESCAPE => return self.clear_selection(),
             VK_F5 => {
                 unsafe {
@@ -777,6 +811,39 @@ impl App {
                 log(&format!("{verb} failed: {e}"));
             }
         };
+        // Several selected: act on all of them, as Explorer does.
+        let many = self.selected_items();
+        if many.len() > 1 {
+            let files: Vec<String> = many.iter().map(|(k, _)| k.clone()).filter(|k| !k.starts_with("::")).collect();
+            let pidls: Vec<shell::Pidl> = many.iter().map(|(_, p)| p.clone()).collect();
+            let c = self.item_screen_rect(host, index);
+            let at = POINT { x: c.x + c.w / 2, y: c.y + c.h / 2 };
+            match key {
+                VK_RETURN if alt => {
+                    if !shell::menu_many(hwnd, &pidls, None, Some("properties")) {
+                        verb("properties", false);
+                    }
+                }
+                VK_RETURN => pidls.iter().for_each(|p| shell::open(hwnd, p)),
+                VK_DELETE if !files.is_empty() => {
+                    self.clear_selection();
+                    shell::delete_many(files, shift);
+                }
+                VK_F2 => self.start_item_rename(host, index),
+                VK_APPS | VK_F10 => {
+                    shell::take_foreground(hwnd);
+                    if !shell::menu_many(hwnd, &pidls, Some(at), None) {
+                        let _ = shell::context_menu(hwnd, &pidl, at);
+                    }
+                    self.desktop_focus();
+                }
+                _ if ctrl && (key.0 == 0x43 || key.0 == 0x58) && !files.is_empty() => {
+                    shell::set_clipboard_files(self.main, &files, key.0 == 0x58);
+                }
+                _ => {}
+            }
+            return;
+        }
         match key {
             VK_RETURN if alt => verb("properties", false),
             VK_RETURN => shell::open(hwnd, &pidl),
@@ -791,6 +858,7 @@ impl App {
                 if let Err(e) = shell::context_menu(hwnd, &pidl, POINT { x: c.x + c.w / 2, y: c.y + c.h / 2 }) {
                     log(&format!("context menu failed: {e}"));
                 }
+                self.desktop_focus();
             }
             _ if ctrl && key.0 == 0x43 && is_file => verb("copy", false),
             _ if ctrl && key.0 == 0x58 && is_file => verb("cut", false),
@@ -836,7 +904,7 @@ impl App {
 
     /// Arrow keys, Home, End, Page Up and Page Down: move through a group's grid, and at its edge
     /// on to the nearest group in that direction, landing on the icon closest to where we were.
-    fn navigate(&mut self, key: VIRTUAL_KEY) {
+    fn navigate(&mut self, key: VIRTUAL_KEY, extend: bool) {
         let Some((host, index, _)) = self.selected_item() else {
             if let Some(first) = self.icon_windows().first().copied() {
                 self.select_visible(first, 0);
@@ -863,7 +931,17 @@ impl App {
             _ => None,
         };
         if let Some(i) = within {
+            if extend {
+                // Shift: select from the anchor to the new position.
+                let anchor = self.ui.get(&host).and_then(|u| u.anchor).unwrap_or(index);
+                self.select_visible(host, i);
+                let range: BTreeSet<usize> = (anchor.min(i)..=anchor.max(i)).collect();
+                return self.select_set(host, range, Some(i), Some(anchor));
+            }
             return self.select_visible(host, i);
+        }
+        if extend {
+            return; // a Shift range stays within its group
         }
         // At the edge: the nearest group in that direction.
         let here = self.item_screen_rect(host, index);
@@ -895,6 +973,15 @@ impl App {
             })
             .unwrap_or(0);
         self.select_visible(to, nearest);
+    }
+
+    /// Ctrl+A: every icon in the group that has the selection (or the first group).
+    fn select_all(&mut self) {
+        let host = self.selection().map(|(h, _)| h).or_else(|| self.icon_windows().first().copied());
+        let Some(host) = host else { return };
+        let n = self.shown_items(host).len();
+        let focus = self.ui.get(&host).and_then(|u| u.focus).filter(|f| *f < n).or((n > 0).then_some(0));
+        self.select_set(host, (0..n).collect(), focus, focus);
     }
 
     /// Typing jumps to the next icon whose name starts with what was typed in the last second,
@@ -1028,6 +1115,24 @@ impl App {
         }
     }
 
+    /// Give the keyboard back to the desktop after one of our menus (the menu needed our window in
+    /// front), unless the command just run opened a window of its own.
+    fn desktop_focus(&self) {
+        unsafe {
+            // Only from our group windows: a Properties sheet the command opened (it lives in this
+            // process too) keeps the focus.
+            let fg = GetForegroundWindow();
+            let mut class = [0u16; 32];
+            let n = GetClassNameW(fg, &mut class) as usize;
+            let ours = matches!(String::from_utf16_lossy(&class[..n]).as_str(), "TesseraFence" | "TesseraMain");
+            if ours || fg.is_invalid() {
+                if let Some(desktop) = shell::desktop_host() {
+                    let _ = SetForegroundWindow(desktop);
+                }
+            }
+        }
+    }
+
     /// The user clicked somewhere that isn't a group (the bare desktop, another program): like
     /// on the native desktop, nothing stays selected.
     fn clear_selection(&mut self) {
@@ -1040,7 +1145,9 @@ impl App {
         self.finish_rename(true);
         let pt = cursor();
         let zone = self.zone(id, x, y);
-        if !matches!(zone, Zone::Item(_)) {
+        let (ctrl, shift) = unsafe { (GetKeyState(VK_CONTROL.0 as i32) < 0, GetKeyState(VK_SHIFT.0 as i32) < 0) };
+        // A Ctrl+click on empty space keeps the selection, as on the native desktop.
+        if !matches!(zone, Zone::Item(_)) && !(ctrl && matches!(zone, Zone::Body)) {
             self.clear_selection();
         }
         self.drag = match zone {
@@ -1056,7 +1163,7 @@ impl App {
                 Drag::None
             }
             Zone::Item(index) => {
-                self.select(id, Some(index));
+                self.click_item(id, index, ctrl, shift);
                 // As on the native desktop, clicking an icon makes the desktop the active window,
                 // so keys (Delete, Enter) go to it rather than to the last program used.
                 if let Some(desktop) = shell::desktop_host() {
@@ -1064,7 +1171,12 @@ impl App {
                         let _ = SetForegroundWindow(desktop);
                     }
                 }
-                Drag::Pending { id, index, px: pt.x, py: pt.y }
+                // Only a selected icon can be dragged (Ctrl+click may just have deselected it).
+                if self.ui.get(&self.cfg.tab_host(id)).is_some_and(|u| u.selected.contains(&index)) {
+                    Drag::Pending { id, index, px: pt.x, py: pt.y }
+                } else {
+                    Drag::None
+                }
             }
             Zone::Body => Drag::None,
         };
@@ -1161,13 +1273,23 @@ impl App {
     /// Hand an icon to OLE drag and drop. Our own groups are drop targets too, so the same drag
     /// reorders within a group, moves between groups, or leaves for another program.
     fn drag_item_out(&mut self, from: u32, hwnd: HWND, key: String) {
-        let Some(pidl) = self.items.get(&key).map(|i| i.pidl.clone()) else { return };
+        self.collapse_on_up = None;
+        // Dragging one icon of a selection drags them all.
+        let mut picked = self.selected_items();
+        if !picked.iter().any(|(k, _)| *k == key) {
+            picked = self.items.get(&key).map(|i| vec![(key.clone(), i.pidl.clone())]).unwrap_or_default();
+        }
+        if picked.is_empty() {
+            return;
+        }
         unsafe {
             let _ = ReleaseCapture();
         }
-        self.own_drag = Some((from, key));
-        // Modal: returns when the item is dropped or the drag is cancelled. Our drop targets run inside it.
-        if let Err(e) = shell::drag_out(hwnd, &pidl) {
+        let (keys, pidls): (Vec<String>, Vec<shell::Pidl>) = picked.into_iter().unzip();
+        self.own_drag = Some((from, keys));
+        // Modal: returns when the items are dropped or the drag is cancelled. Our drop targets run inside it.
+        let result = if pidls.len() == 1 { shell::drag_out(hwnd, &pidls[0]) } else { shell::drag_out_many(hwnd, &pidls) };
+        if let Err(e) = result {
             log(&format!("drag failed: {e}"));
         }
         self.own_drag = None;
@@ -1219,11 +1341,22 @@ impl App {
 
     /// One of our own icons was dropped on group `to`: regroup or reorder it. No file is touched.
     pub fn drop_own_item(&mut self, to: u32, pt: POINT) {
-        let (Some((from, key)), Some((_, index))) = (self.own_drag.clone(), self.drop_target(pt).filter(|t| t.0 == to)) else { return };
-        if self.cfg.move_item(&key, to, index) {
-            let landed = self.cfg.fence(to).and_then(|f| f.items.iter().position(|k| *k == key));
+        let (Some((from, keys)), Some((_, index))) = (self.own_drag.clone(), self.drop_target(pt).filter(|t| t.0 == to)) else { return };
+        // Move them in their on-screen order, each landing right after the previous one.
+        // (move_item allows for an item leaving from earlier in the same group.)
+        let mut at = index;
+        let mut moved = false;
+        for key in &keys {
+            if self.cfg.move_item(key, to, at) {
+                moved = true;
+            }
+            at = self.cfg.fence(to).and_then(|f| f.items.iter().position(|k| k == key)).map(|p| p + 1).unwrap_or(at);
+        }
+        if moved {
+            let landed: BTreeSet<usize> = keys.iter().filter_map(|key| self.cfg.fence(to).and_then(|f| f.items.iter().position(|k| k == key))).collect();
             self.paint(from);
-            self.select(to, landed);
+            let focus = landed.iter().next().copied();
+            self.select_set(to, landed, focus, focus);
             self.paint(to);
             self.dirty();
         }
@@ -1245,7 +1378,7 @@ impl App {
             return None;
         }
         let item = self.items.get(&f.items[index])?;
-        let dragged_itself = self.own_drag.as_ref().is_some_and(|(_, key)| *key == item.key);
+        let dragged_itself = self.own_drag.as_ref().is_some_and(|(_, keys)| keys.contains(&item.key));
         ((item.is_folder || item.key.starts_with("::")) && !dragged_itself).then(|| (index, item.key.clone(), item.pidl.clone()))
     }
 
@@ -1325,8 +1458,50 @@ impl App {
     fn end_drag(&mut self, _commit: bool) {
         match std::mem::replace(&mut self.drag, Drag::None) {
             Drag::Move { .. } | Drag::Resize { .. } => self.dirty(),
+            // A plain click on one icon of a multiple selection, without dragging: just that icon.
+            Drag::Pending { id, index, .. } if _commit && self.collapse_on_up == Some((id, index)) => {
+                // Remembered briefly: if this click turns out to be the first of a double-click, the
+                // double-click opens the whole selection.
+                self.collapsed_from = self.ui.get(&id).map(|u| (id, u.selected.clone(), std::time::Instant::now()));
+                self.select(id, Some(index));
+            }
             Drag::Pending { .. } | Drag::None => {}
         }
+        self.collapse_on_up = None;
+    }
+
+    /// Clicking an icon: Ctrl toggles it, Shift selects the range from the last clicked icon
+    /// (Ctrl+Shift adds that range), a plain click selects only it. A plain click on an icon that
+    /// is already part of a selection keeps the selection until the button comes up, so the whole
+    /// selection can be dragged.
+    fn click_item(&mut self, id: u32, index: usize, ctrl: bool, shift: bool) {
+        let host = self.cfg.tab_host(id);
+        let (current, anchor) = match self.ui.get(&host) {
+            Some(ui) if !ui.selected.is_empty() => (ui.selected.clone(), ui.anchor),
+            _ => (BTreeSet::new(), None),
+        };
+        if shift {
+            let from = anchor.unwrap_or(index);
+            let range: BTreeSet<usize> = (from.min(index)..=from.max(index)).collect();
+            let set = if ctrl { current.union(&range).copied().collect() } else { range };
+            return self.select_set(host, set, Some(index), Some(from));
+        }
+        if ctrl {
+            let mut set = current;
+            if !set.remove(&index) {
+                set.insert(index);
+            }
+            return self.select_set(host, set, Some(index), Some(index));
+        }
+        if current.contains(&index) && current.len() > 1 {
+            self.collapse_on_up = Some((host, index));
+            if let Some(ui) = self.ui.get_mut(&host) {
+                ui.focus = Some(index);
+                ui.anchor = Some(index);
+            }
+            return;
+        }
+        self.select(host, Some(index));
     }
 
     fn double_click(&mut self, id: u32, hwnd: HWND, x: i32, y: i32) {
@@ -1342,8 +1517,18 @@ impl App {
                     let folder = item.key.clone();
                     self.portal_show(id, Some(folder));
                 } else {
-                    let pidl = item.pidl.clone();
-                    shell::open(hwnd, &pidl);
+                    // Double-clicking one of several selected icons opens them all, as on the desktop.
+                    let single = item.pidl.clone();
+                    let host = self.cfg.tab_host(id);
+                    let window = std::time::Duration::from_millis(unsafe { GetDoubleClickTime() } as u64 + 100);
+                    if let Some((h, set, at)) = self.collapsed_from.take() {
+                        if h == host && at.elapsed() < window && set.contains(&index) {
+                            self.select_set(host, set, Some(index), Some(index));
+                        }
+                    }
+                    let all = self.ui.get(&host).is_some_and(|u| u.selected.len() > 1 && u.selected.contains(&index));
+                    let pidls: Vec<shell::Pidl> = if all { self.selected_items().into_iter().map(|(_, p)| p).collect() } else { vec![single] };
+                    pidls.iter().for_each(|p| shell::open(hwnd, p));
                 }
             }
             _ => {}
@@ -1412,7 +1597,7 @@ impl App {
         ui.nav = folder;
         ui.scroll = 0;
         ui.hover = None;
-        ui.selected = None;
+        (ui.selected, ui.anchor, ui.focus) = (BTreeSet::new(), None, None);
         self.paint(id);
         self.refresh_portals(Some(id));
         self.watch_shell();
@@ -1514,6 +1699,14 @@ impl App {
         let pt = cursor();
         match self.zone(id, x, y) {
             Zone::Item(index) => {
+                // Right-clicking one of several selected icons: the menu is for all of them.
+                let host = self.cfg.tab_host(id);
+                if self.ui.get(&host).is_some_and(|u| u.selected.len() > 1 && u.selected.contains(&index)) {
+                    let pidls: Vec<shell::Pidl> = self.selected_items().into_iter().map(|(_, p)| p).collect();
+                    if shell::menu_many(hwnd, &pidls, Some(pt), None) {
+                        return self.desktop_focus();
+                    }
+                }
                 self.select(id, Some(index));
                 let pidl = self.shown(id).and_then(|f| f.items.get(index)).and_then(|k| self.items.get(k)).map(|i| i.pidl.clone());
                 if let Some(pidl) = pidl {
@@ -1521,6 +1714,7 @@ impl App {
                         log(&format!("context menu: {e}"));
                     }
                 }
+                self.desktop_focus();
             }
             // Right-clicking a tab brings it forward first, so the menu is about that tab.
             Zone::Tab(i) => {
@@ -2123,7 +2317,7 @@ fn is_desktop_key(key: VIRTUAL_KEY, mods: isize) -> bool {
         VK_DELETE | VK_F2 | VK_F5 | VK_ESCAPE | VK_APPS => plain,
         VK_RETURN => !ctrl,                 // Enter opens, Alt+Enter shows properties
         VK_F10 => shift && plain,           // Shift+F10: the context menu
-        _ if ctrl && !alt => matches!(key.0, 0x43 | 0x58 | 0x56) && !shift || key.0 == 0x4E && shift, // Ctrl+C/X/V, Ctrl+Shift+N
+        _ if ctrl && !alt => matches!(key.0, 0x41 | 0x43 | 0x58 | 0x56) && !shift || key.0 == 0x4E && shift, // Ctrl+A/C/X/V, Ctrl+Shift+N
         _ => letter && plain && !shift,     // type to jump to an icon
     }
 }
@@ -2379,6 +2573,8 @@ unsafe fn run() -> Result<()> {
         pending_rename: None,
         typeahead: (String::new(), None),
         own_drag: None,
+        collapse_on_up: None,
+        collapsed_from: None,
         pending_drops: HashMap::new(),
         desktop_dirs: shell::desktop_dirs(),
         portal_tx: shell::spawn_portal_worker(main, WM_PORTAL_READY),
