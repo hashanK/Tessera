@@ -1,0 +1,1056 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tessera Settings</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --side: #eceef2; --card: #ffffff; --raised: #ffffff; --line: #0f172a1a; --line-strong: #0f172a2e;
+    --ink: #1b1d21; --dim: #5f6672; --faint: #8a909b; --field: #eef0f4; --hover: #0f172a0d;
+    --accent: #3f73e0; --accent-soft: #3f73e01f; --on-accent: #fff; --danger: #c43d4b; --ok: #2f9e6b;
+    --shadow: 0 1px 2px #0f172a14;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171b; --side: #111317; --card: #1c1f25; --raised: #2a2e37; --line: #ffffff14; --line-strong: #ffffff29;
+      --ink: #eceef2; --dim: #a0a7b3; --faint: #737a86; --field: #262a32; --hover: #ffffff0d;
+      --accent: #6b9bf5; --accent-soft: #6b9bf529; --on-accent: #0b1220; --danger: #f07684; --ok: #58c896;
+      --shadow: 0 1px 2px #0006;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { display: grid; grid-template-columns: 200px 1fr; background: var(--bg); color: var(--ink);
+         font: 13px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; user-select: none; cursor: default; -webkit-font-smoothing: antialiased; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: default; }
+  ::-webkit-scrollbar { width: 12px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; border: 3px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--faint); border: 3px solid transparent; background-clip: content-box; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---- sidebar ---- */
+  aside { background: var(--side); border-right: 1px solid var(--line); padding: 20px 10px 14px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 20px; font: 600 15px "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+  .logo { border-radius: 6px; flex: none; }
+  .logo:not([src]) { visibility: hidden; }
+  .mark { display: grid; grid-template-columns: 9px 9px; gap: 3px; }
+  .mark i { width: 9px; height: 9px; border-radius: 3px; background: var(--ink); opacity: .82; }
+  .mark i:nth-child(2) { background: var(--accent); opacity: 1; }
+  nav { display: flex; flex-direction: column; gap: 2px; }
+  nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: 6px; color: var(--dim); position: relative; transition: background .1s, color .1s; }
+  nav button svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  nav button:hover { background: var(--hover); color: var(--ink); }
+  nav button[aria-current=true] { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+  nav button[aria-current=true] svg { stroke: var(--accent); }
+  .status { margin-top: auto; padding: 10px; font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+  .dot.on { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+
+  /* ---- page ---- */
+  main { overflow-y: auto; padding: 28px 32px 48px; scrollbar-gutter: stable; }
+  .wrap { max-width: 700px; margin: 0 auto; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+  h1 { font: 600 22px/1.2 "Segoe UI Variable Display", "Segoe UI", sans-serif; margin: 0; letter-spacing: -.005em; }
+  .lede { color: var(--dim); margin: 3px 0 0; }
+  h2 { font-size: 12px; font-weight: 600; color: var(--dim); margin: 26px 2px 8px; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; box-shadow: var(--shadow); }
+  .row { display: flex; align-items: center; gap: 16px; padding: 10px 16px; min-height: 52px; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .label { flex: 1; min-width: 0; }
+  .label small, .note { display: block; color: var(--dim); font-size: 12px; margin-top: 1px; }
+
+  .banner { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 10px; margin-bottom: 20px;
+            border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 9%, var(--card)); }
+  .banner div { flex: 1; }
+
+  /* ---- controls ---- */
+  .btn { border: 1px solid var(--line-strong); background: var(--raised); padding: 6px 14px; border-radius: 6px; white-space: nowrap; transition: background .1s, border-color .1s, transform .05s; }
+  .btn:hover { border-color: var(--faint); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.07); }
+  .btn.danger { color: var(--danger); }
+  .btn.danger:hover { border-color: var(--danger); }
+  .btn.quiet { border-color: transparent; background: none; color: var(--dim); padding: 6px 10px; }
+  .btn.quiet:hover { background: var(--hover); color: var(--danger); }
+
+  .seg { display: inline-flex; background: var(--field); border-radius: 7px; padding: 2px; gap: 2px; }
+  .seg button { border: 0; background: none; padding: 4px 12px; border-radius: 5px; color: var(--dim); min-width: 56px; transition: background .1s, color .1s; }
+  .seg button:hover { color: var(--ink); }
+  .seg button[aria-pressed=true] { background: var(--raised); color: var(--ink); box-shadow: 0 0 0 1px var(--line), var(--shadow); font-weight: 600; }
+
+  .swatches { display: flex; gap: 6px; }
+  .sw { width: 24px; height: 24px; border-radius: 50%; border: 0; padding: 0; background: none; display: grid; place-items: center; }
+  .sw::before { content: ""; width: 16px; height: 16px; border-radius: 50%; background: var(--c); transition: transform .1s; }
+  .sw:hover::before { transform: scale(1.15); }
+  .sw[aria-pressed=true] { box-shadow: inset 0 0 0 2px var(--c); }
+  .sw[aria-pressed=true]::before { transform: scale(.82); }
+
+  .tog { width: 38px; height: 20px; border-radius: 10px; border: 0; padding: 0; background: var(--field); box-shadow: inset 0 0 0 1px var(--line-strong); position: relative; transition: background .12s; flex: none; }
+  .tog::after { content: ""; position: absolute; top: 4px; left: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--dim); transition: transform .12s, background .12s; }
+  .tog[aria-pressed=true] { background: var(--accent); box-shadow: none; }
+  .tog[aria-pressed=true]::after { transform: translateX(18px); background: var(--on-accent); }
+
+  .slider { display: flex; align-items: center; gap: 10px; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 168px; height: 20px; background: none; margin: 0; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--accent) var(--p), var(--line-strong) var(--p)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--accent); border: 3px solid var(--card); box-shadow: 0 0 0 1px var(--line-strong); transition: transform .1s; }
+  input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.15); }
+  .val { width: 36px; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+  select, input[type=text] { background: var(--field); border: 1px solid transparent; border-radius: 6px; padding: 5px 9px; outline: none; transition: border-color .1s, background .1s; }
+  select { -webkit-appearance: none; appearance: none; padding-right: 28px; min-width: 132px;
+           background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23808793' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+  select:hover, input[type=text]:hover { border-color: var(--line-strong); }
+  select:focus-visible, input[type=text]:focus { border-color: var(--accent); background-color: var(--card); outline: none; }
+  select option { background: var(--card); color: var(--ink); }
+  input[type=text] { user-select: text; cursor: text; }
+
+  /* ---- group cards ---- */
+  .ghead { display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 12px; width: 100%; border: 0; background: none; text-align: left; border-radius: 10px; transition: background .1s; }
+  .ghead:hover { background: var(--hover); }
+  .ghead .name { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ghead .meta { color: var(--dim); font-size: 12px; white-space: nowrap; }
+  .badge { font-size: 11px; font-weight: 600; color: var(--dim); background: var(--field); border-radius: 9px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
+  .chev { width: 16px; height: 16px; fill: none; stroke: var(--faint); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; flex: none; }
+  .card.open .chev { transform: rotate(90deg); }
+  .card.open .ghead { border-radius: 10px 10px 0 0; }
+  .gbody { display: grid; grid-template-columns: 208px 1fr; gap: 6px 22px; padding: 6px 16px 16px; border-top: 1px solid var(--line); }
+  .gbody.enter { animation: enter .16s ease-out; }
+  @keyframes enter { from { opacity: 0; transform: translateY(-4px); } }
+  .gside { padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .gside input[type=text] { width: 100%; font-weight: 600; }
+  .fields .row { padding: 6px 0; min-height: 44px; gap: 12px; }
+  .fields .row + .row { border-top: 0; }
+  .fields .label { color: var(--dim); }
+  .fields .label small { color: var(--faint); }
+  .gfoot { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; color: var(--faint); font-size: 12px; }
+  .gfoot .btn { font-size: 13px; }
+  .gfoot .btn:not(.quiet) { color: var(--ink); }
+  @media (max-width: 800px) { .gbody { grid-template-columns: 1fr; } .gside { flex-direction: row; align-items: center; } .gside .pv { width: 150px; height: 96px; flex: none; } }
+
+  /* ---- live preview of a group on a stand-in wallpaper ---- */
+  .pv { height: 132px; border-radius: 8px; padding: 14px; overflow: hidden; background: linear-gradient(135deg, #27364f 0%, #5d5a86 48%, #c88a72 100%); box-shadow: inset 0 0 0 1px var(--line); }
+  .pv.light-wall { background: linear-gradient(135deg, #cfe0f1 0%, #e9dff0 50%, #f6dcc6 100%); }
+  .pv-g { height: 100%; border-radius: 7px; background: var(--surf); box-shadow: inset 0 0 0 1px var(--edge); color: var(--txt); padding: 6px 9px; font-size: 10px; font-weight: 600; overflow: hidden; transition: background .12s; }
+  .pv-g.rolled { height: 24px; }
+  .pv-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .86; }
+  .pv-tabs { display: flex; gap: 2px; margin: -2px -4px 0; }
+  .pv-tabs span { flex: 1 1 0; min-width: 0; text-align: center; padding: 2px 4px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .6; }
+  .pv-tabs.fit span { flex: 0 1 auto; padding: 2px 7px; }
+  .pv-tabs span.on { background: var(--tab); opacity: 1; }
+
+  /* ---- tabs section of a group card ---- */
+  .gtabs { grid-column: 1 / -1; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; }
+  .gtabs .row { padding: 6px 0; min-height: 44px; gap: 12px; border-top: 0; }
+  .gtabs .label { color: var(--dim); }
+  .gtabs .label small { color: var(--faint); }
+  .chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; align-items: center; }
+  .chip { border: 1px solid var(--line-strong); background: var(--raised); border-radius: 14px; padding: 3px 12px; color: var(--dim); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: background .1s, color .1s, border-color .1s; }
+  .chip:hover { color: var(--ink); border-color: var(--faint); }
+  .chip[aria-pressed=true] { background: var(--c); border-color: transparent; color: #fff; font-weight: 600; }
+  .chip.add { border-style: dashed; color: var(--dim); }
+  .iconbtn { border: 1px solid var(--line-strong); background: var(--raised); width: 28px; height: 26px; border-radius: 6px; padding: 0; color: var(--dim); font-size: 15px; line-height: 1; }
+  .iconbtn:hover:not(:disabled) { color: var(--ink); border-color: var(--faint); }
+  .iconbtn:disabled { opacity: .35; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .pv-i { display: flex; flex-wrap: wrap; gap: calc(var(--i) * .45); margin-top: 8px; }
+  .pv-i i { width: var(--i); height: var(--i); border-radius: 28%; background: var(--txt); opacity: .22; }
+  .pv-i i:nth-child(3n+1) { opacity: .34; }
+  .mini { width: 30px; height: 22px; border-radius: 5px; flex: none; padding: 4px; background: linear-gradient(135deg, #27364f, #5d5a86 48%, #c88a72); box-shadow: inset 0 0 0 1px var(--line); }
+  .mini i { display: block; height: 100%; border-radius: 3px; background: var(--surf); box-shadow: inset 0 0 0 1px var(--edge); }
+
+  kbd { font: 11px "Cascadia Mono", Consolas, monospace; background: var(--field); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; padding: 2px 7px; margin-left: 4px; }
+  .path { display: block; user-select: text; font: 12px "Cascadia Mono", Consolas, monospace; color: var(--dim); word-break: break-all; margin-top: 2px; }
+  .promises { margin: 0; padding: 6px 0; list-style: none; }
+  .promises li { display: flex; gap: 12px; padding: 8px 16px; }
+  .promises svg { width: 16px; height: 16px; flex: none; margin-top: 1px; fill: none; stroke: var(--ok); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .about-head { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+  .about-head .mark { grid-template-columns: 18px 18px; gap: 5px; }
+  .about-head .mark i { width: 18px; height: 18px; border-radius: 5px; }
+  .empty { text-align: center; color: var(--dim); padding: 56px 20px; }
+
+  /* ---- group preview: mirrors the desktop renderer (see window.groupHtml) ---- */
+  .stage { position: relative; border-radius: 8px; overflow: hidden; background: linear-gradient(135deg, #27364f 0%, #5d5a86 48%, #c88a72 100%); box-shadow: inset 0 0 0 1px var(--line); background-repeat: no-repeat; }
+  .stage.st-dark { background: radial-gradient(circle at 25% 30%, #3b4a6b 0, transparent 45%), radial-gradient(circle at 80% 70%, #6b3f5a 0, transparent 40%), linear-gradient(160deg, #171b24, #232a38); }
+  .stage.st-light { background: radial-gradient(circle at 20% 25%, #ffffff 0, transparent 40%), radial-gradient(circle at 85% 75%, #f3d3c0 0, transparent 45%), linear-gradient(160deg, #dbe5f1, #eef0f6); }
+  .tg { position: relative; overflow: hidden; isolation: isolate; box-sizing: border-box; }
+  .tg::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: var(--noise, 0);
+               background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1.6 -.55'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)'/%3E%3C/svg%3E"); mix-blend-mode: overlay; }
+  .tg-t { display: flex; align-items: center; padding: 0 12px; white-space: nowrap; overflow: hidden; }
+  .tg-t span { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .tg-tabs { display: flex; gap: 2px; flex: 1; min-width: 0; margin: 0 -7px; }
+  .tg-tabs b { flex: 1 1 0; min-width: 0; text-align: center; padding: 3px 7px; border-radius: 6px; overflow: hidden; text-overflow: ellipsis; font-weight: inherit; }
+  .tg-items { display: flex; flex-wrap: wrap; align-content: flex-start; }
+  .tg-i { position: relative; display: flex; flex-direction: column; align-items: center; border-radius: 6px; box-sizing: border-box; }
+  .tg-i.right { flex-direction: row; align-items: center; }
+  .tg-ic { position: relative; flex: none; display: grid; place-items: center; transition: transform .12s; }
+  .tg-ic svg { display: block; position: relative; }
+  .tg-l { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; word-break: break-word; }
+  .tg-i.sel-u::after { content: ""; position: absolute; left: 30%; right: 30%; bottom: 3px; height: 2px; border-radius: 1px; background: var(--acc); }
+  /* Live preview: hover with the pointer, click to select. Same timings as the desktop. */
+  .tg.live .tg-i { transition: background var(--hd-out) ease, box-shadow var(--sd) ease; }
+  .tg.live .tg-i:hover:not(.sel) { background: var(--hov-bg); transition: background var(--hd) ease, box-shadow var(--sd) ease; }
+  .tg.live .tg-i.sel { background: var(--sel-bg); box-shadow: var(--sel-sh); }
+  .tg.live .tg-ic { transition: transform var(--hd-out) ease; }
+  .tg.live .tg-i:hover .tg-ic { transform: translateY(var(--hl)) scale(var(--hs)); transition: transform var(--hd) var(--he); }
+  .tg.live .tg-glow { transition: opacity var(--hd-out) ease; }
+  .tg.live .tg-i:hover .tg-glow { opacity: 1 !important; transition: opacity var(--hd) ease; }
+  .tg.live.u .tg-i::after { content: ""; position: absolute; left: 30%; right: 30%; bottom: 3px; height: 2px; border-radius: 1px; background: var(--acc); transform: scaleX(0); transition: transform var(--sd) ease; }
+  .tg.live.u .tg-i.sel::after { transform: scaleX(1); }
+  .tg.live.sm-pulse .tg-i.sel.burst::before { content: ""; position: absolute; inset: 2px; border-radius: 6px; border: 2px solid var(--acc); animation: tg-ring .45s ease-out forwards; pointer-events: none; }
+  .tg.live.sm-pop .tg-i.sel.burst .tg-ic svg { animation: tg-pop .36s ease-out; }
+  @keyframes tg-ring { from { inset: 2px; opacity: .75; } to { inset: -5px; opacity: 0; border-radius: 12px; } }
+  @keyframes tg-pop { 50% { transform: scale(1.14); } }
+
+  /* ---- appearance editor ---- */
+  .wrap.wide { max-width: 1080px; }
+  .ed-grid { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: 22px; align-items: start; }
+  .ed-left { position: sticky; top: 0; display: flex; flex-direction: column; gap: 10px; }
+  .ed-left .stage { height: 330px; display: grid; place-items: center; }
+  .ed-tools { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ed-right .card { padding: 4px 16px 8px; }
+  .ed-right h2:first-child { margin-top: 2px; }
+  .ed-right .row { padding: 6px 0; min-height: 40px; gap: 12px; }
+  .ed-right .row + .row { border-top: 0; }
+  .ed-right .label { color: var(--dim); flex: 1 1 130px; }
+  .ed-right .row { flex-wrap: wrap; }
+  .ed-right .ctl { margin-left: auto; max-width: 100%; flex-wrap: wrap; justify-content: flex-end; }
+  .ed-right .seg { flex-wrap: wrap; }
+  .ed-right input[type=range] { width: 120px; }
+  .ed-right .seg button { min-width: 0; padding: 4px 8px; }
+  .ed-grid > * { min-width: 0; }
+  .ed-foot { position: sticky; bottom: -48px; margin: 18px -32px -48px; padding: 12px 32px 16px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+  .ed-foot .spacer { flex: 1; }
+  .reset { border: 0; background: none; color: var(--faint); width: 22px; height: 22px; border-radius: 5px; padding: 0; font-size: 13px; visibility: hidden; }
+  .reset.on { visibility: visible; }
+  .reset:hover { background: var(--hover); color: var(--ink); }
+  .ctl { display: flex; align-items: center; gap: 6px; }
+  .mats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 6px 0 10px; }
+  .mat { border: 1px solid var(--line-strong); background: var(--raised); border-radius: 8px; padding: 6px; text-align: left; color: var(--dim); display: flex; flex-direction: column; gap: 6px; transition: border-color .1s; }
+  .mat:hover { border-color: var(--faint); color: var(--ink); }
+  .mat[aria-pressed=true] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); color: var(--ink); font-weight: 600; }
+  .mat .stage { height: 44px; border-radius: 5px; display: grid; place-items: center; }
+  .mat .stage i { width: 70%; height: 62%; border-radius: 6px; }
+  .colorctl { display: flex; align-items: center; gap: 6px; }
+  .colorctl input[type=color] { -webkit-appearance: none; appearance: none; width: 30px; height: 24px; padding: 0; border: 1px solid var(--line-strong); border-radius: 6px; background: none; }
+  .colorctl input[type=color]::-webkit-color-swatch-wrapper { padding: 2px; }
+  .colorctl input[type=color]::-webkit-color-swatch { border: 0; border-radius: 4px; }
+  .colorctl.auto input[type=color] { opacity: .35; }
+  .pill { border: 1px solid var(--line-strong); background: var(--raised); border-radius: 12px; padding: 2px 10px; font-size: 12px; color: var(--dim); }
+  .pill[aria-pressed=true] { background: var(--accent-soft); border-color: transparent; color: var(--ink); font-weight: 600; }
+  .ed-right select { min-width: 150px; max-width: 200px; }
+  @media (max-width: 860px) { .ed-grid { grid-template-columns: 1fr; } .ed-left { position: static; } }
+
+  /* ---- theme library ---- */
+  .tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: 12px; }
+  .tcard { background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+  .tcard .stage { height: 128px; border-radius: 0; display: grid; place-items: center; box-shadow: none; border-bottom: 1px solid var(--line); }
+  .tcard-b { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .tcard-h { display: flex; align-items: center; gap: 8px; }
+  .tcard-h b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tcard-h input[type=text] { flex: 1; min-width: 0; font-weight: 600; }
+  .tcard select { width: 100%; min-width: 0; }
+  .tcard .actions { justify-content: flex-start; gap: 4px; }
+  .tcard .btn { padding: 4px 10px; font-size: 12px; }
+
+  #toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 20px); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand"><img class="logo" id="logo" alt="" width="26" height="26">Tessera</div>
+  <nav id="nav" aria-label="Sections"></nav>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">Checking…</span></div>
+</aside>
+<main><div class="wrap" id="page"></div></main>
+<div id="toast" role="status"></div>
+
+<script>
+const post = (o) => window.ipc.postMessage(JSON.stringify(o));
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ICON = {
+  groups: '<svg viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1.2"/><rect x="9" y="2" width="5" height="5" rx="1.2"/><rect x="2" y="9" width="5" height="5" rx="1.2"/><rect x="9" y="9" width="5" height="5" rx="1.2"/></svg>',
+  appearance: '<svg viewBox="0 0 16 16"><path d="M8 1.8c2.6 3 4.2 5.2 4.2 7.4a4.2 4.2 0 0 1-8.4 0C3.8 7 5.4 4.8 8 1.8z"/></svg>',
+  behaviour: '<svg viewBox="0 0 16 16"><path d="M2 4.5h7M12.5 4.5H14M2 11.5h1.5M7 11.5h7"/><circle cx="10.8" cy="4.5" r="1.7"/><circle cx="5.2" cy="11.5" r="1.7"/></svg>',
+  about: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 7.3v3.7M8 5v.1"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></svg>',
+  check: '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>',
+};
+ICON.profiles = '<svg viewBox="0 0 16 16"><path d="M8 2 14 5 8 8 2 5z"/><path d="M2 8l6 3 6-3M2 11l6 3 6-3"/></svg>';
+ICON.themes = '<svg viewBox="0 0 16 16"><rect x="2" y="2.5" width="8" height="8" rx="2"/><path d="M6 13.5h6a2 2 0 0 0 2-2v-6"/></svg>';
+ICON.folder = '<svg viewBox="0 0 16 16" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round;vertical-align:-2px;margin-right:6px"><path d="M2 4.5c0-.6.4-1 1-1h3l1.5 1.5H13c.6 0 1 .4 1 1v6c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1z"/></svg>';
+let confirmDelete = 0, focusTabOf = 0;
+const PAGES = [["groups", "Groups"], ["profiles", "Profiles"], ["appearance", "Appearance"], ["themes", "Themes"], ["behaviour", "Behaviour"], ["about", "About"]];
+const SIZES = [[32, "Small"], [48, "Medium"], [64, "Large"]];
+let S = null, page = "groups", pending = false, dragging = false, confirmRebuild = false, justOpened = null, awaitingNew = -1, toastTimer = 0;
+const open = new Set();
+
+// The host calls this with fresh state after every command and whenever the window regains focus.
+window.render = (state) => {
+  S = state;
+  const logo = document.getElementById("logo"); if (state.icon && !logo.src) logo.src = state.icon;
+  if (state.error) toast(state.error);
+  const fences = state.config ? state.config.fences : [];
+  if (awaitingNew >= 0 && fences.length > awaitingNew) {       // a group we asked for now exists: open it, ready to be named
+    const id = fences[fences.length - 1].id;
+    open.add(id); justOpened = id; awaitingNew = -1;
+    draw();
+    const input = document.querySelector(`input[data-act="title"][data-id="${id}"]`);
+    if (input) { input.focus(); input.select(); input.scrollIntoView({ block: "nearest" }); }
+    return;
+  }
+  if (focusTabOf) {                                              // a tab we just added: ready to be named
+    const host = focusTabOf; focusTabOf = 0;
+    draw();
+    const input = document.querySelector(`input[data-act="title"][data-host="${host}"]`);
+    if (input) { input.focus(); input.select(); input.scrollIntoView({ block: "nearest" }); }
+    return;
+  }
+  const a = document.activeElement;
+  if (dragging || (a && a.matches("input[type=text]"))) { pending = true; return; }   // don't rebuild under the user's hands
+  draw();
+};
+
+function toast(text) {
+  const el = document.getElementById("toast");
+  el.textContent = text; el.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+// ---------------------------------------------------------------- look maths
+// The same colour and size rules as the desktop renderer (crates/app/src/render.rs and
+// crates/core/src/layout.rs), so previews are honest.
+const toRgb = (h) => [1, 3, 5].map((i) => parseInt(String(h).slice(i, i + 2), 16));
+const toHex = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${+a.toFixed(3)})`;
+const mixc = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+const lum = (c) => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+const tintRgb = (name) => (S.tints.find((t) => t.name === name) || S.tints[0]).rgb;
+const rgb = (name) => `rgb(${tintRgb(name)})`;
+const WALL_MATS = ["Acrylic", "Mica", "Frosted"];
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const getp = (o, path) => path.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
+const setp = (o, path, v) => { const k = path.split("."); const last = k.pop(); k.reduce((a, x) => a[x], o)[last] = v; };
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+let WALL = null, wallAsked = false;
+
+function lowFx() { return !!(S.config && S.config.low_effects); }
+function effective(style) {
+  const s = clone(style);
+  if (lowFx()) {
+    if (WALL_MATS.includes(s.material)) { s.material = "Transparent"; s.opacity = Math.max(s.opacity, 75); }
+    s.noise = 0; s.shadow = { ...s.shadow, kind: "None" };
+  }
+  if (WALL_MATS.includes(s.material) && !WALL) s.wallMissing = true;
+  return s;
+}
+function palette(s, theme) {
+  const dark = theme !== "Light", base = dark ? [0x14, 0x16, 0x1a] : [0xf4, 0xf5, 0xf7];
+  const surface = s.color ? toRgb(s.color) : mixc(base, tintRgb(s.tint), dark ? 0.16 : 0.12);
+  const accent = s.accent ? toRgb(s.accent) : s.tint === "Slate" ? [91, 141, 239] : tintRgb(s.tint);
+  const op = s.opacity / 100;
+  let behind = null;
+  if (s.material === "Solid") behind = surface;
+  else if (s.material === "Gradient") { const st = s.gradient.stops.map(toRgb); behind = [0, 1, 2].map((i) => st.reduce((a, c) => a + c[i], 0) / st.length); }
+  else if (op >= 0.4) behind = surface;
+  const lightBg = behind ? lum(behind) > 0.55 : !dark;
+  const ink = s.text.color ? toRgb(s.text.color) : lightBg ? [0x16, 0x18, 0x1d] : [255, 255, 255];
+  return { ink, title: s.title.color ? toRgb(s.title.color) : ink, secondary: s.text.secondary ? toRgb(s.text.secondary) : ink, accent, surface, light: lum(ink) < 0.5 };
+}
+function background(s, p) {
+  const op = s.opacity / 100;
+  switch (s.material) {
+    case "Solid": return `background:${rgba(p.surface, 1)};`;
+    case "Gradient": {
+      const st = s.gradient.stops.map((c) => rgba(toRgb(c), op)).join(",");
+      return s.gradient.radial ? `background:radial-gradient(ellipse 75% 75% at 50% 50%,${st});` : `background:linear-gradient(${(s.gradient.angle + 90) % 360}deg,${st});`;
+    }
+    case "Acrylic": case "Mica": case "Frosted": {
+      if (s.wallMissing) return `background:${rgba(p.surface, Math.max(op, 0.75))};`;
+      const radius = s.material === "Mica" ? 90 : 4 + s.blur * 0.6;
+      const veil = s.material === "Frosted" ? "linear-gradient(rgba(255,255,255,.1),rgba(255,255,255,.1))," : "";
+      return `background:${veil}linear-gradient(${rgba(p.surface, op)},${rgba(p.surface, op)});backdrop-filter:blur(${(radius / 1.7).toFixed(1)}px);`;
+    }
+    default: return `background:${rgba(p.surface, op)};`;
+  }
+}
+
+// Sample icons for previews: simple shapes in real-world colours, recoloured like the renderer does.
+const SAMPLES = [
+  ["folder", "Projects"], ["doc", "Quarterly report final draft.docx"], ["app", "Studio"],
+  ["play", "Player"], ["photo", "Holiday photo.png"], ["music", "Music"], ["app2", "Notes"], ["folder", "Downloads"],
+];
+function sampleIcon(kind, size, look) {
+  const k = (hex) => {
+    let c = toRgb(hex);
+    const grey = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2], sat = look.saturation / 100;
+    c = c.map((v) => grey + (v - grey) * sat);
+    if (look.tint && look.tint_amount > 0) c = mixc(c, toRgb(look.tint), Math.min(look.tint_amount, 60) / 100);
+    return toHex(c);
+  };
+  const body = {
+    folder: `<path d="M4 11a3 3 0 0 1 3-3h11l4 4h19a3 3 0 0 1 3 3v22a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z" fill="${k("#e9a923")}"/><path d="M4 17a3 3 0 0 1 3-3h34a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z" fill="${k("#f6c344")}"/>`,
+    doc: `<path d="M11 4h18l10 10v28a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="${k("#f4f6fa")}"/><path d="M29 4v8a2 2 0 0 0 2 2h8z" fill="${k("#c9d3e3")}"/><path d="M15 22h18M15 28h18M15 34h12" stroke="${k("#3f73e0")}" stroke-width="2.5" stroke-linecap="round"/>`,
+    app: `<defs><linearGradient id="g${kind}" x2="1" y2="1"><stop offset="0" stop-color="${k("#7b5cff")}"/><stop offset="1" stop-color="${k("#3fa2ff")}"/></linearGradient></defs><rect x="4" y="4" width="40" height="40" rx="10" fill="url(#g${kind})"/><circle cx="24" cy="24" r="9" fill="none" stroke="#fff" stroke-width="3.5"/>`,
+    play: `<rect x="4" y="4" width="40" height="40" rx="10" fill="${k("#ff7a45")}"/><path d="M19 15l14 9-14 9z" fill="#fff"/>`,
+    photo: `<rect x="4" y="8" width="40" height="32" rx="5" fill="${k("#34c38f")}"/><path d="M4 34l11-12 9 9 6-6 14 13v2a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="${k("#1f8a62")}"/><circle cx="33" cy="17" r="4" fill="${k("#fff4c2")}"/>`,
+    music: `<circle cx="24" cy="24" r="20" fill="${k("#ff4d8d")}"/><path d="M21 31V15l10-2v14" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><circle cx="18" cy="31" r="3.5" fill="#fff"/><circle cx="28" cy="28" r="3.5" fill="#fff"/>`,
+    app2: `<rect x="4" y="4" width="40" height="40" rx="10" fill="${k("#ffd23f")}"/><path d="M14 16h20M14 24h20M14 32h12" stroke="${k("#7a5a00")}" stroke-width="3" stroke-linecap="round"/>`,
+  }[kind];
+  return `<svg width="${size}" height="${size}" viewBox="0 0 48 48" style="opacity:${look.opacity / 100}">${body}</svg>`;
+}
+
+/** One group as HTML, sized in CSS pixels at 100 %. `o`: {title, tabs:[{title,on}], items, width, theme} */
+function groupHtml(style, o) {
+  const s = effective(style), p = palette(s, o.theme), t = s.title, x = s.text, look = s.icons;
+  const font = x.family ? `"${x.family.replace(/"/g, "")}", ` : "";
+  const fam = `font-family:${font}"Segoe UI Variable Text","Segoe UI",sans-serif;`;
+  const line = x.size * 1.33 * x.line_height, labelH = Math.round(line * x.lines), right = look.label === "Right";
+  const icon = s.icon, cellW = right ? icon + s.spacing * 0.5 + 10 + Math.max(x.size * 11, 110) : icon + s.spacing;
+  const cellH = right ? Math.max(icon, labelH) + 14 + Math.max(s.spacing - 28, -12) / 3 : icon + labelH + 18 + (s.spacing - 28) / 2;
+  const bw = s.border.width > 0 && s.border.opacity > 0 ? Math.max(s.border.width, 1) : 0;
+  const shadows = [];
+  if (s.shadow.kind !== "None" && s.shadow.intensity > 0) shadows.push(`0 ${s.shadow.offset}px ${(s.shadow.blur * 1.18).toFixed(1)}px ${s.shadow.spread}px rgba(0,0,0,${(s.shadow.intensity / 100 * 0.9).toFixed(2)})`);
+  if (s.border.highlight) shadows.push(`inset 0 ${Math.max(1, bw) + 1}px 1px -1px rgba(255,255,255,${p.light ? 0.75 : 0.32})`);
+  if (s.border.inner) shadows.push(`inset 0 0 0 1px rgba(255,255,255,${p.light ? 0.35 : 0.06})`);
+  if (s.border.inner_shadow) shadows.push("inset 0 0 9px rgba(0,0,0,.22)");
+  const border = bw ? `border:${bw}px ${s.border.line === "Dashed" ? "dashed" : "solid"} ${rgba(s.border.color ? toRgb(s.border.color) : p.ink, s.border.opacity / 100)};` : "";
+  const shadowText = x.shadow === "On" || (x.shadow === "Auto" && !p.light);
+  const tshadow = shadowText ? `text-shadow:0 1px 0 ${p.light ? "rgba(255,255,255,.55)" : "rgba(0,0,0,.45)"};` : "";
+  const cols = Math.max(1, Math.floor((o.width - 2 * s.padding) / cellW));
+  const items = SAMPLES.slice(0, o.items ?? cols * 2);
+  const titleCss = `height:${t.height}px;font-size:${t.size}px;font-weight:${t.weight};color:${rgba(p.title, 0.88)};justify-content:${{ Left: "flex-start", Center: "center", Right: "flex-end" }[t.align]};text-align:${t.align.toLowerCase()};letter-spacing:${x.letter_spacing}px;`
+    + (t.band ? `background:${rgba(p.title, t.band / 100 * 0.6)};` : "") + (t.separator ? `box-shadow:inset 0 -1px 0 ${rgba(p.ink, 0.1)};` : "");
+  const head = o.tabs && o.tabs.length > 1
+    ? `<div class="tg-tabs">${o.tabs.map((tb) => `<b style="${tb.on ? `background:${rgba(p.accent, p.light ? 0.32 : 0.62)};color:${rgba(p.title, 0.98)}` : `color:${rgba(p.secondary, 0.58)}`}">${esc(tb.title)}</b>`).join("")}</div>`
+    : `<span>${esc(o.title)}</span>`;
+  // A live preview reacts to the pointer (hover) and to clicks (selection) with the same
+  // durations and curves as the desktop; a still one shows the second icon hovered and the third selected.
+  const selTile = `background:${rgba(p.accent, 0.32)};box-shadow:inset 0 0 0 1px ${rgba(p.accent, 0.6)};`;
+  const selOutline = `box-shadow:inset 0 0 0 1.5px ${rgba(p.accent, 0.9)};`;
+  const glowHtml = (op) => `<i class="tg-glow" style="position:absolute;inset:${-icon * 0.35}px;border-radius:50%;opacity:${op};background:radial-gradient(closest-side,${rgba(p.accent, 0.55)},${rgba(p.accent, 0)})"></i>`;
+  const cell = (it, i) => {
+    const hov = !o.live && i === 1, sel = !o.live && i === 2;
+    let bg = "", lift = 0, glow = look.hover === "Glow" && o.live ? glowHtml(0) : "";
+    if (sel && look.selection === "Tile") bg = selTile;
+    else if (sel && look.selection === "Outline") bg = selOutline;
+    else if (hov && look.hover === "Tile") bg = `background:${rgba(p.ink, 0.09)};`;
+    if (hov && look.hover === "Lift") lift = 3;
+    if (hov && look.hover === "Glow") glow = glowHtml(1);
+    const cont = look.container !== "None" && look.container_opacity > 0
+      ? `<i style="position:absolute;inset:-5px;border-radius:${look.container === "Circle" ? "50%" : icon * 0.26 + "px"};background:${rgba(p.ink, look.container_opacity / 100 * (p.light ? 0.6 : 1))}"></i>` : "";
+    const label = `<span class="tg-l" style="${right ? `margin-left:8px;flex:1;text-align:${x.align === "Center" ? "left" : x.align.toLowerCase()}` : `margin-top:4px;width:${cellW - 6}px;text-align:${x.align.toLowerCase()}`};-webkit-line-clamp:${x.lines};max-height:${labelH}px;line-height:${line.toFixed(2)}px;font-size:${x.size}px;font-weight:${x.weight};letter-spacing:${x.letter_spacing}px;color:${rgba(p.ink, 0.95)};${tshadow}">${esc(it[1])}</span>`;
+    return `<div class="tg-i ${right ? "right" : ""} ${sel && look.selection === "Underline" ? "sel-u" : ""}" style="width:${cellW}px;height:${cellH}px;${right ? "padding-left:8px" : "padding-top:8px"};${bg}">
+      <span class="tg-ic" style="width:${icon}px;height:${icon}px;transform:translateY(${-lift}px)">${glow}${cont}${sampleIcon(it[0], icon, look)}</span>${label}</div>`;
+  };
+  const height = o.rolled ? t.height : o.height || t.height + Math.ceil(items.length / cols) * cellH + s.padding;
+  // Motion for the live preview, as CSS variables (see .tg.live in the styles).
+  const allowed = !lowFx() && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const hm = allowed ? look.hover_motion : "None", sm = allowed ? look.select_motion : "None";
+  const hoverSecs = { None: 0, Fade: 0.14, Grow: 0.18, Float: 0.18, Pop: 0.26 }[hm];
+  const motion = o.live ? `--hd:${hoverSecs}s;--hd-out:${(hoverSecs * 1.4).toFixed(3)}s;--he:${hm === "Pop" ? "cubic-bezier(.34,1.8,.6,1)" : "ease"};--hs:${{ Grow: 1.07, Pop: 1.09 }[hm] || 1};--hl:${-((look.hover === "Lift" ? 3 : 0) + (hm === "Float" ? 4 : 0))}px;`
+    + `--hov-bg:${look.hover === "Tile" ? rgba(p.ink, 0.09) : "transparent"};--sd:${sm === "None" ? 0 : 0.16}s;--sel-bg:${look.selection === "Tile" ? rgba(p.accent, 0.32) : "transparent"};--sel-sh:${look.selection === "Tile" ? `inset 0 0 0 1px ${rgba(p.accent, 0.6)}` : look.selection === "Outline" ? `inset 0 0 0 1.5px ${rgba(p.accent, 0.9)}` : "none"};` : "";
+  const liveClass = o.live ? `live ${look.selection === "Underline" ? "u" : ""} sm-${sm.toLowerCase()}` : "";
+  return `<div class="tg ${liveClass}" aria-hidden="true" style="width:${o.width}px;height:${height}px;border-radius:${s.radius}px;${background(s, p)}${border}box-shadow:${shadows.join(",") || "none"};--noise:${(s.noise / 100 * 0.55).toFixed(2)};--acc:${rgba(p.accent, 0.95)};${motion}${fam}">
+    <div class="tg-t" style="${titleCss}">${head}</div>
+    ${o.rolled ? "" : `<div class="tg-items" style="padding:0 ${s.padding}px;justify-content:center">${items.map(cell).join("")}</div>`}</div>`;
+}
+
+/** A backdrop for a preview: the real wallpaper (around `rect` when given) or a stand-in. */
+function stageStyle(kind, rect) {
+  if (kind === "wall" && WALL) {
+    const k = 1 / (window.devicePixelRatio || 1), w = screen.width;
+    const pos = rect ? `${-(rect.x * k) + 24}px ${-(rect.y * k) + 24}px` : "center";
+    return `background:#222 url(${WALL}) ${pos} / ${w}px auto no-repeat;`;
+  }
+  return "";
+}
+const stageClass = (kind) => (kind === "dark" || (kind === "wall" && !WALL) ? "st-dark" : kind === "light" ? "st-light" : "");
+
+// Small preview used on group cards and the Appearance page.
+const preview = (title, style, theme, rolled, tabs = [], tabStyle = "Fill", rect = null) =>
+  `<div class="stage pv-stage ${stageClass("wall")}" style="height:132px;display:grid;place-items:center;${stageStyle("wall", null)}"><div style="zoom:.62">${groupHtml(style, { title, tabs, items: 4, width: 300, height: 180, theme, rolled })}</div></div>`;
+const surface = (style, theme) => { const s = effective(style), p = palette(s, theme); return background(s, p) + `border-radius:4px`; };
+// The tabs of a window, host first, and the one on screen.
+function tabsOf(host) {
+  const order = [host, ...host.tabs.map((id) => S.config.fences.find((f) => f.id === id)).filter(Boolean)];
+  const shown = order.find((f) => f.id === host.active_tab) || host;
+  return { order, shown };
+}
+const isMember = (f) => S.config.fences.some((h) => h.tabs.includes(f.id));
+const seg = (act, id, options, current, label) =>
+  `<span class="seg" role="group" aria-label="${label}">${options.map(([v, text]) => `<button data-act="${act}" data-id="${id}" data-v="${v}" aria-pressed="${v == current}">${text}</button>`).join("")}</span>`;
+const swatches = (act, id, current) =>
+  `<span class="swatches" role="group" aria-label="Colour">${S.tints.map((t) => `<button class="sw" title="${t.name}" aria-label="${t.name}" style="--c:${rgb(t.name)}" data-act="${act}" data-id="${id}" data-v="${t.name}" aria-pressed="${t.name === current}"></button>`).join("")}</span>`;
+const slider = (act, id, value) =>
+  `<span class="slider"><input type="range" min="20" max="100" step="1" value="${value}" style="--p:${(value - 20) / 0.8}%" data-act="${act}" data-id="${id}" data-v="" aria-label="Opacity"><span class="val">${value}%</span></span>`;
+const toggle = (act, id, on, label) => `<button class="tog" role="switch" data-act="${act}" data-id="${id}" data-v="${!on}" aria-pressed="${on}" aria-checked="${on}" aria-label="${label}"></button>`;
+const row = (label, hint, control) => `<div class="row"><div class="label">${label}${hint ? `<small>${hint}</small>` : ""}</div>${control}</div>`;
+
+// One card per window. Look (colour, opacity, icon size, roll-up, tab style) belongs to the window;
+// name, sort order and what it collects belong to the tab selected in the chips row, which is also
+// the tab on screen on the desktop.
+function groupCard(host, theme) {
+  const { order, shown: f } = tabsOf(host);
+  const tabbed = order.length > 1;
+  const isOpen = open.has(host.id);
+  const n = order.reduce((sum, t) => sum + t.items.length, 0);
+  const portal = f.portal || "";
+  const about = (t) => t.portal ? ICON.folder + "Folder portal" : t.inbox ? "Catches everything else" : t.category ? "Collects " + t.category.toLowerCase() : "";
+  const meta = tabbed ? `${order.length} tabs` : about(f);
+  const name = tabbed ? order.map((t) => esc(t.title)).join('<span style="color:var(--faint)"> · </span>') : esc(host.title);
+  const accent = host.style.tint === "Slate" ? "rgb(91,141,239)" : rgb(host.style.tint);
+  let body = "";
+  if (isOpen) {
+    const pos = order.indexOf(f);
+    const others = S.config.fences.filter((g) => !isMember(g) && g.id !== host.id);
+    const rule = `<select data-act="rule" data-id="${f.id}" data-v="" aria-label="Collects new items"><option value="">Nothing</option>${S.categories.map((c) => `<option ${f.category === c ? "selected" : ""}>${c}</option>`).join("")}</select>`;
+    const sortOptions = portal ? [["Name", "Name"], ["Kind", "Kind"]] : [["Manual", "Manual"], ["Name", "Name"], ["Kind", "Kind"]];
+    const sortValue = portal && f.sort === "Manual" ? "Name" : f.sort;
+    const chips = order.map((t) => `<button class="chip" style="--c:${accent}" data-act="tab-pick" data-id="${t.id}" data-v="" aria-pressed="${t === f}" title="${esc(t.title)}">${esc(t.title)}</button>`).join("");
+    const combine = others.length
+      ? `<select data-act="tab-merge" data-id="${host.id}" data-v="" aria-label="Combine into another group"><option value="">Combine into…</option>${others.map((g) => `<option value="${g.id}">${esc(g.title)}</option>`).join("")}</select>`
+      : "";
+    const removeLabel = tabbed ? "Close tab" : portal ? "Remove portal" : "Delete group";
+    const removeNote = f.inbox ? "The catch-all can't be removed."
+      : portal ? "Removing a portal leaves the folder and its files untouched."
+      : "Its icons move to the catch-all group. No files are deleted.";
+    body = `<div class="gbody ${justOpened === host.id ? "enter" : ""}">
+      <div class="gside">
+        ${preview(f.title, host.style, theme, host.collapsed, tabbed ? order.map((t) => ({ title: t.title, on: t === f })) : [], host.tab_style)}
+        <input type="text" maxlength="64" value="${esc(f.title)}" data-act="title" data-id="${f.id}" data-host="${host.id}" data-v="" aria-label="${tabbed ? "Tab name" : "Group name"}" spellcheck="false">
+      </div>
+      <div class="fields">
+        ${row("Look", lookName(host.style), `<span class="actions">${themeSelect("look-theme", host.id)}<button class="btn" data-act="customise" data-id="${host.id}" data-v="">Customise…</button></span>`)}
+        ${row("Colour", "", swatches("tint", host.id, host.style.tint))}
+        ${row("Opacity", "", slider("opacity", host.id, host.style.opacity))}
+        ${row("Icon size", "", seg("icon", host.id, SIZES, host.style.icon, "Icon size"))}
+        ${tabbed ? row("Tab style", "", seg("tab-style", host.id, [["Fill", "Equal width"], ["Fit", "Fit names"]], host.tab_style, "Tab style")) : ""}
+        ${row("Rolled up", "", toggle("collapsed", host.id, host.collapsed, "Rolled up"))}
+      </div>
+      <div class="gtabs">
+        ${row("Tabs", tabbed ? "Click a tab to edit it. It comes forward on the desktop too." : "Split this group into tabs, each with its own icons.",
+          `<span class="chips">${tabbed ? chips : ""}<button class="chip add" data-act="tab-add" data-id="${host.id}" data-v="">+ Add tab</button></span>`)}
+        ${portal ? row(`${tabbed ? "This tab shows a folder" : "Folder"}<span class="path">${esc(portal)}</span>`, "", "") : ""}
+        ${row(tabbed ? "Sort this tab" : "Sort by", portal ? "Folders come first when sorting by name." : "", seg("sort", f.id, sortOptions, sortValue, "Sort by"))}
+        ${portal ? "" : row(tabbed ? "This tab collects" : "Collects new", f.inbox ? "Plus anything no other group collects" : "", rule)}
+        ${tabbed ? row("Arrange", "", `<span class="actions">
+            <button class="iconbtn" data-act="tab-left" data-id="${f.id}" data-v="" title="Move tab left" aria-label="Move tab left" ${pos === 0 ? "disabled" : ""}>‹</button>
+            <button class="iconbtn" data-act="tab-right" data-id="${f.id}" data-v="" title="Move tab right" aria-label="Move tab right" ${pos === order.length - 1 ? "disabled" : ""}>›</button>
+            <button class="btn" data-act="tab-detach" data-id="${f.id}" data-v="">Make it its own group</button></span>`) : ""}
+      </div>
+      <div class="gfoot"><span>${removeNote}</span>
+        <span class="actions">${combine}${f.inbox ? "" : `<button class="btn quiet" data-act="delete" data-id="${f.id}" data-v="">${removeLabel}</button>`}</span></div>
+    </div>`;
+  }
+  return `<section class="card ${isOpen ? "open" : ""}">
+    <button class="ghead" data-act="open" data-id="${host.id}" data-v="" aria-expanded="${isOpen}">
+      <span class="mini"><i style="${surface(host.style, theme)}"></i></span><span class="name">${name}</span>
+      <span class="meta">${meta}</span><span class="badge" title="${n} item${n === 1 ? "" : "s"}">${n}</span>${ICON.chev}
+    </button>${body}</section>`;
+}
+
+// ---------------------------------------------------------------- themes
+const allThemes = () => [...(S.config ? S.config.custom_themes || [] : []).map((t) => ({ ...t, builtin: false })), ...S.themes.map((t) => ({ ...t, builtin: true }))];
+const findTheme = (name) => allThemes().find((t) => t.name === name);
+/** The theme a style matches (icon size aside), or "Custom". */
+function lookName(style) {
+  const t = allThemes().find((t) => same({ ...t.style, icon: 0 }, { ...style, icon: 0 }));
+  return t ? t.name : "Custom look";
+}
+const themeSelect = (act, id) => `<select data-act="${act}" data-id="${id}" data-v="" aria-label="Apply a theme"><option value="">Apply a theme…</option>${allThemes().map((t) => `<option value="${esc(t.name)}">${esc(t.name)}</option>`).join("")}</select>`;
+let renaming = null, confirmTheme = null;
+
+// ---------------------------------------------------------------- appearance editor
+// ED = { target: {kind: "group"|"defaults"|"theme", id, name, builtin}, draft, original, from (page to go back to),
+//        live (preview on the desktop), sent (a live preview reached the desktop), bg, saving (name being typed) }
+let ED = null, liveTimer = 0, liveLast = 0;
+
+function openEditor(target) {
+  const c = S.config;
+  let style;
+  if (target.kind === "group") style = c.fences.find((f) => f.id === target.id).style;
+  else if (target.kind === "defaults") style = c.default_style;
+  else style = findTheme(target.name).style;
+  ED = { target, draft: clone(style), original: clone(style), from: page, live: target.kind === "group", sent: false, bg: "wall", saving: null, sel: 2 };
+  page = "editor";
+  draw();
+  document.querySelector("main").scrollTop = 0;
+}
+function closeEditor(apply) {
+  const { target, draft, original, sent } = ED;
+  if (apply) {
+    if (target.kind === "group") post({ cmd: "look", id: target.id, style: draft });
+    else if (target.kind === "defaults") post({ cmd: "look_defaults", style: draft });
+    else if (!target.builtin) post({ cmd: "theme_save", name: target.name, style: draft });
+    toast(target.kind === "theme" ? "Theme saved" : "Look applied");
+  } else if (sent && target.kind === "group") {
+    post({ cmd: "look", id: target.id, style: original });   // undo the live preview
+  }
+  page = ED.from; ED = null; clearTimeout(liveTimer);
+  draw();
+}
+/** Send the draft to the desktop, at most every 60 ms while a control moves. */
+function previewLive() {
+  if (!ED || !ED.live || ED.target.kind !== "group") return;
+  clearTimeout(liveTimer);
+  const go = () => { liveLast = Date.now(); ED.sent = true; post({ cmd: "look", id: ED.target.id, style: ED.draft, quiet: true }); };
+  const wait = 60 - (Date.now() - liveLast);
+  if (wait <= 0) go(); else liveTimer = setTimeout(go, wait);
+}
+function edited(full) {
+  if (full) { draw(); } else { drawStage(); }
+  previewLive();
+}
+
+const DEFAULT = () => S.defaultLook;
+const dflt = (path) => getp(DEFAULT(), path);
+function field(path, label, control, hint = "") {
+  const changed = !same(getp(ED.draft, path), dflt(path));
+  return `<div class="row"><div class="label">${label}${hint ? `<small>${hint}</small>` : ""}</div><span class="ctl">${control}<button class="reset ${changed ? "on" : ""}" data-act="ed-reset" data-id="${path}" data-v="" title="Back to default" aria-label="Reset ${label}">↺</button></span></div>`;
+}
+const edSlider = (path, min, max, step, unit = "") => {
+  const v = getp(ED.draft, path), pct = ((v - min) / (max - min)) * 100;
+  return `<span class="slider"><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" style="--p:${pct}%" data-act="ed" data-id="${path}" data-v="" data-unit="${unit}"><span class="val">${+(+v).toFixed(2)}${unit}</span></span>`;
+};
+const edSeg = (path, options) => `<span class="seg" role="group">${options.map(([v, text]) => `<button data-act="ed" data-id="${path}" data-v="${v}" aria-pressed="${String(getp(ED.draft, path)) === String(v)}">${text}</button>`).join("")}</span>`;
+const edToggle = (path) => { const on = !!getp(ED.draft, path); return `<button class="tog" role="switch" data-act="ed" data-id="${path}" data-v="${!on}" aria-pressed="${on}" aria-checked="${on}"></button>`; };
+/** A colour that may be automatic (`null`). `auto` is shown in the picker while automatic. */
+const edColor = (path, auto) => {
+  const v = getp(ED.draft, path);
+  return `<span class="colorctl ${v ? "" : "auto"}">${v === undefined ? "" : `<button class="pill" data-act="ed-auto" data-id="${path}" data-v="" aria-pressed="${!v}">Auto</button>`}<input type="color" value="${v || toHex(auto)}" data-act="ed-color" data-id="${path}" data-v="" aria-label="Colour"></span>`;
+};
+const MATERIALS = [
+  ["Transparent", "Tinted", "A see-through colour. The original look."],
+  ["Acrylic", "Acrylic", "Blurred wallpaper under a tint, with grain."],
+  ["Frosted", "Frosted glass", "Blurred wallpaper under a pale frost."],
+  ["Mica", "Mica", "The wallpaper's colours, softly. Very light on detail."],
+  ["Gradient", "Gradient", "Two or three colours, linear or radial."],
+  ["Solid", "Solid", "Fully opaque."],
+];
+
+/** Mark the preview icon the user clicked as selected; `burst` replays the selection motion. */
+function markSelected(burst) {
+  const items = document.querySelectorAll("#ed-stage .tg-i");
+  items.forEach((el, i) => { el.classList.toggle("sel", i === ED.sel); el.classList.remove("burst"); });
+  const el = items[ED.sel];
+  if (el && burst) { void el.offsetWidth; el.classList.add("burst"); }
+}
+function drawStage() {
+  const el = document.getElementById("ed-stage");
+  if (!el || !ED) return;
+  el.innerHTML = editorGroup();
+  markSelected(false);
+  document.querySelectorAll(".reset").forEach((b) => b.classList.toggle("on", !same(getp(ED.draft, b.dataset.id), dflt(b.dataset.id))));
+}
+function editorGroup() {
+  const c = S.config, t = ED.target;
+  const name = t.kind === "group" ? c.fences.find((f) => f.id === t.id).title : t.kind === "defaults" ? "New group" : t.name;
+  const theme = ED.bg === "light" ? "Light" : ED.bg === "dark" ? "Dark" : c.theme;
+  return groupHtml(ED.draft, { title: name, width: Math.min(372, Math.max(240, ED.draft.icon * 3 + ED.draft.spacing * 3 + 30)), items: 6, theme, live: true });
+}
+
+function editorPage() {
+  const c = S.config, d = ED.draft, t = ED.target, p = palette(effective(d), c.theme);
+  const isWall = WALL_MATS.includes(d.material), rect = t.kind === "group" ? c.fences.find((f) => f.id === t.id).rect : null;
+  const what = t.kind === "group" ? `“${esc(c.fences.find((f) => f.id === t.id).title)}”` : t.kind === "defaults" ? "new groups" : `the “${esc(t.name)}” theme`;
+  const mats = MATERIALS.map(([v, label, hint]) => {
+    const s = { ...clone(d), material: v, noise: 0 }, sp = palette(effective(s), c.theme);
+    return `<button class="mat" data-act="ed" data-id="material" data-v="${v}" aria-pressed="${d.material === v}" title="${hint}">
+      <span class="stage ${stageClass(ED.bg)}" style="${stageStyle(ED.bg, rect)}"><i style="${background(effective(s), sp)}"></i></span>${label}</button>`;
+  }).join("");
+  const fonts = `<select data-act="ed-select" data-id="text.family" data-v="" aria-label="Font"><option value="">System (Segoe UI)</option>${(S.fonts || []).map((f) => `<option ${f === d.text.family ? "selected" : ""}>${esc(f)}</option>`).join("")}</select>`;
+  const weights = [[300, "Light"], [400, "Regular"], [600, "Semibold"], [700, "Bold"]];
+  const g = d.gradient;
+  const stops = g.stops.map((s, i) => `<input type="color" value="${s}" data-act="ed-color" data-id="gradient.stops.${i}" data-v="" aria-label="Colour ${i + 1}">`).join("")
+    + (g.stops.length < 3 ? `<button class="iconbtn" data-act="ed-stop" data-id="add" data-v="" title="Add a colour">+</button>` : `<button class="iconbtn" data-act="ed-stop" data-id="remove" data-v="" title="Remove the last colour">−</button>`);
+  const shadowOn = d.shadow.kind !== "None";
+  return `
+  <div class="head"><div><h1>Customise ${what}</h1><p class="lede">${t.kind === "group" && ED.live ? "Changes show here and on the desktop as you make them. Apply keeps them; Cancel puts the group back." : "Changes show in the preview. Apply keeps them."}</p></div>
+    <button class="btn" data-act="ed-cancel" data-id="0" data-v="">Back</button></div>
+  <div class="ed-grid">
+    <div class="ed-left">
+      <div class="stage ${stageClass(ED.bg)}" id="ed-stage" style="${stageStyle(ED.bg, rect)}">${editorGroup()}</div>
+      <div class="ed-tools">${seg("ed-bg", 0, [["wall", "Wallpaper"], ["dark", "Dark"], ["light", "Light"]], ED.bg, "Preview background")}
+        <select data-act="ed-theme" data-id="0" data-v="" aria-label="Start from a theme"><option value="">Start from a theme…</option>${allThemes().map((x) => `<option value="${esc(x.name)}">${esc(x.name)}</option>`).join("")}</select></div>
+      ${lowFx() ? '<p class="note">Low effects is on (Appearance page): wallpaper blur, grain and shadows are off everywhere, including here.</p>' : ""}
+      ${isWall && !WALL ? '<p class="note">The wallpaper couldn\'t be read, so wallpaper materials show as plain translucency.</p>' : ""}
+    </div>
+    <div class="ed-right">
+      <h2>Background</h2>
+      <div class="card"><div class="mats">${mats}</div>
+        ${d.material === "Gradient" ? field("gradient.stops", "Colours", `<span class="colorctl">${stops}</span>`) + field("gradient.radial", "Shape", edSeg("gradient.radial", [[false, "Linear"], [true, "Radial"]])) + (g.radial ? "" : field("gradient.angle", "Direction", edSlider("gradient.angle", 0, 359, 1, "°"))) : ""}
+        ${d.material === "Solid" || d.material === "Gradient" ? "" : field("tint", "Colour family", swatches("ed-tint", 0, d.tint), "Sets the background and accent together.")}
+        ${d.material === "Gradient" ? "" : field("color", d.material === "Solid" ? "Colour" : "Background colour", edColor("color", p.surface))}
+        ${d.material === "Solid" ? "" : field("opacity", isWall ? "Tint strength" : "Opacity", edSlider("opacity", 5, 100, 1, "%"))}
+        ${d.material === "Acrylic" || d.material === "Frosted" ? field("blur", "Blur", edSlider("blur", 0, 100, 1, "%")) : ""}
+        ${field("noise", "Grain", edSlider("noise", 0, 100, 1, "%"))}
+        ${field("accent", "Accent", edColor("accent", p.accent), "Front tab, selection and drop marker.")}
+      </div>
+      <h2>Shape and border</h2>
+      <div class="card">
+        ${field("radius", "Corner radius", edSlider("radius", 0, 24, 1, "px"))}
+        ${field("border.width", "Border width", edSlider("border.width", 0, 4, 0.5, "px"))}
+        ${d.border.width > 0 ? field("border.color", "Border colour", edColor("border.color", p.ink)) + field("border.opacity", "Border opacity", edSlider("border.opacity", 0, 100, 1, "%")) + field("border.line", "Line", edSeg("border.line", [["Solid", "Solid"], ["Dashed", "Dashed"]])) : ""}
+        ${field("border.highlight", "Top highlight", edToggle("border.highlight"), "Light catching the top edge.")}
+        ${field("border.inner", "Inner line", edToggle("border.inner"))}
+        ${field("border.inner_shadow", "Inner shadow", edToggle("border.inner_shadow"))}
+      </div>
+      <h2>Shadow</h2>
+      <div class="card">
+        ${field("shadow.kind", "Shadow", edSeg("shadow.kind", [["None", "None"], ["Ambient", "Ambient"], ["Soft", "Soft"], ["Floating", "Floating"]]))}
+        ${shadowOn ? field("shadow.intensity", "Strength", edSlider("shadow.intensity", 0, 100, 1, "%")) + field("shadow.blur", "Softness", edSlider("shadow.blur", 0, 40, 1, "px")) + field("shadow.offset", "Drop", edSlider("shadow.offset", 0, 24, 1, "px")) + field("shadow.spread", "Spread", edSlider("shadow.spread", -12, 12, 1, "px")) : ""}
+      </div>
+      <h2>Title bar</h2>
+      <div class="card">
+        ${field("title.height", "Height", edSlider("title.height", 22, 48, 1, "px"))}
+        ${field("title.align", "Alignment", edSeg("title.align", [["Left", "Left"], ["Center", "Centre"], ["Right", "Right"]]))}
+        ${field("title.size", "Size", edSlider("title.size", 9, 20, 0.5, "px"))}
+        ${field("title.weight", "Weight", edSeg("title.weight", weights))}
+        ${field("title.color", "Colour", edColor("title.color", p.title))}
+        ${field("title.band", "Band", edSlider("title.band", 0, 100, 1, "%"), "A tinted strip behind the title.")}
+        ${field("title.separator", "Separator line", edToggle("title.separator"))}
+      </div>
+      <h2>Labels</h2>
+      <div class="card">
+        ${field("text.family", "Font", fonts, "Also used for the title.")}
+        ${field("text.size", "Size", edSlider("text.size", 8, 18, 0.5, "px"))}
+        ${field("text.weight", "Weight", edSeg("text.weight", weights))}
+        ${field("text.color", "Colour", edColor("text.color", p.ink))}
+        ${field("text.secondary", "Secondary colour", edColor("text.secondary", p.secondary), "Item counts and tabs that aren't in front.")}
+        ${field("text.line_height", "Line height", edSlider("text.line_height", 0.8, 1.6, 0.05, "×"))}
+        ${field("text.letter_spacing", "Letter spacing", edSlider("text.letter_spacing", -1, 4, 0.1, "px"))}
+        ${field("text.align", "Alignment", edSeg("text.align", [["Left", "Left"], ["Center", "Centre"], ["Right", "Right"]]))}
+        ${field("text.lines", "Lines", edSeg("text.lines", [[1, "1"], [2, "2"], [3, "3"]]), "Longer names end with …")}
+        ${field("text.shadow", "Text shadow", edSeg("text.shadow", [["Auto", "Auto"], ["On", "On"], ["Off", "Off"]]), "Auto adds one behind light text.")}
+      </div>
+      <h2>Icons</h2>
+      <div class="card">
+        ${field("icon", "Size", edSlider("icon", 16, 128, 4, "px"))}
+        ${field("icons.label", "Label", edSeg("icons.label", [["Below", "Below"], ["Right", "Beside"]]))}
+        ${field("icons.opacity", "Opacity", edSlider("icons.opacity", 20, 100, 1, "%"))}
+        ${field("icons.saturation", "Colour", edSlider("icons.saturation", 0, 100, 1, "%"), "100 % is each icon's own colours.")}
+        ${field("icons.tint", "Tint", edColor("icons.tint", p.accent), "Shifts icons towards one colour, gently.")}
+        ${d.icons.tint ? field("icons.tint_amount", "Tint amount", edSlider("icons.tint_amount", 0, 60, 1, "%")) : ""}
+        ${field("icons.container", "Background", edSeg("icons.container", [["None", "None"], ["Rounded", "Rounded"], ["Circle", "Circle"]]))}
+        ${d.icons.container !== "None" ? field("icons.container_opacity", "Background opacity", edSlider("icons.container_opacity", 0, 60, 1, "%")) : ""}
+        ${field("icons.hover", "On hover", edSeg("icons.hover", [["Tile", "Tile"], ["Lift", "Lift"], ["Glow", "Glow"], ["None", "None"]]), "Point at an icon in the preview to try it.")}
+        ${field("icons.hover_motion", "Hover motion", edSeg("icons.hover_motion", [["None", "None"], ["Fade", "Fade"], ["Grow", "Grow"], ["Float", "Float"], ["Pop", "Pop"]]), "How the hover effect comes and goes.")}
+        ${field("icons.selection", "When selected", edSeg("icons.selection", [["Tile", "Tile"], ["Outline", "Outline"], ["Underline", "Underline"]]), "Click an icon in the preview to try it.")}
+        ${field("icons.select_motion", "Selection motion", edSeg("icons.select_motion", [["None", "None"], ["Fade", "Fade"], ["Pulse", "Pulse"], ["Pop", "Pop"]]), "Pulse sends a ripple out; Pop bounces the icon once.")}
+      </div>
+      <h2>Spacing</h2>
+      <div class="card">
+        ${field("padding", "Padding", edSlider("padding", 2, 24, 1, "px"), "Between the edge and the icons.")}
+        ${field("spacing", "Icon spacing", edSlider("spacing", 8, 64, 1, "px"))}
+      </div>
+    </div>
+  </div>
+  <div class="ed-foot">
+    ${t.kind === "group" ? `<span class="label" style="flex:none;color:var(--dim)">On the desktop</span>${toggle("ed-live", 0, ED.live, "Preview on the desktop")}` : ""}
+    <span class="spacer"></span>
+    <button class="btn quiet" data-act="ed-default" data-id="0" data-v="">Reset all</button>
+    ${ED.saving !== null
+      ? `<input type="text" id="ed-save-name" maxlength="40" value="${esc(ED.saving)}" placeholder="Theme name" data-act="ed-save-name" data-id="0" data-v="" aria-label="Theme name" spellcheck="false" style="width:170px">`
+      : `<button class="btn" data-act="ed-save" data-id="0" data-v="">Save as theme…</button>`}
+    <button class="btn" data-act="ed-cancel" data-id="0" data-v="">Cancel</button>
+    <button class="btn primary" data-act="ed-apply" data-id="0" data-v="">${t.kind === "theme" ? (t.builtin ? "Save as new theme" : "Save theme") : "Apply"}</button>
+  </div>`;
+}
+
+const pages = {
+  groups: (c) => `
+    <div class="head"><div><h1>Groups</h1><p class="lede">${c.profiles.length ? `Profile <b>${esc(c.profile_name)}</b>. ` : ""}Changes show up on the desktop as you make them.</p></div>
+      <span style="display:flex;gap:8px"><button class="btn" data-act="new-portal" data-id="0" data-v="" title="Show a folder's contents on the desktop">New folder portal…</button>
+      <button class="btn primary" data-act="new" data-id="0" data-v="">New group</button></span></div>
+    ${c.fences.filter((f) => !isMember(f)).map((f) => groupCard(f, c.theme)).join("")}`,
+  profiles: (c) => {
+    const all = [{ id: c.profile_id, name: c.profile_name, fences: c.fences, active: true }, ...c.profiles].sort((a, b) => a.id - b.id);
+    return `
+    <div class="head"><div><h1>Profiles</h1><p class="lede">A profile is a complete desktop arrangement: its own groups, positions and looks.</p></div>
+      <button class="btn primary" data-act="p-new" data-id="0" data-v="">New profile</button></div>
+    ${all.map((p, i) => `<section class="card"><div class="row">
+        <span class="dot ${p.active ? "on" : ""}" title="${p.active ? "On screen now" : ""}"></span>
+        <div class="label"><input type="text" maxlength="40" value="${esc(p.name)}" data-act="p-name" data-id="${p.id}" data-v="" aria-label="Profile name" spellcheck="false" style="font-weight:600;width:220px">
+          <small>${p.fences.length} group${p.fences.length === 1 ? "" : "s"}${i < 9 ? ` · <kbd style="margin:0">Ctrl</kbd><kbd>Alt</kbd><kbd>Shift</kbd><kbd>${i + 1}</kbd>` : ""}</small></div>
+        ${all.length > 1 ? `<button class="btn quiet" data-act="p-delete" data-id="${p.id}" data-v="">${confirmDelete === p.id ? "Click again to delete" : "Delete"}</button>` : ""}
+        ${p.active ? '<span class="badge" style="padding:3px 10px">On screen</span>' : `<button class="btn" data-act="p-switch" data-id="${p.id}" data-v="">Switch to</button>`}
+      </div></section>`).join("")}
+    <p class="note" style="margin:14px 2px">A new profile starts as a copy of the one on screen, so it also works as a snapshot you can return to. Switching never moves files; icons added to the desktop while a profile was away are filed when you switch back.</p>`;
+  },
+  appearance: (c) => `
+    <div class="head"><div><h1>Appearance</h1><p class="lede">How groups look on the desktop. Each group can also have its own look: open it on the Groups page and choose Customise.</p></div></div>
+    <div class="card">${row("Light or dark", "Default text and surface colours for groups that don't set their own. Dark suits most wallpapers.", seg("theme", 0, [["Dark", "Dark"], ["Light", "Light"]], c.theme, "Theme"))}
+      ${row("Low effects", "Turns off wallpaper blur, grain and shadows. For older PCs and remote desktop sessions.", toggle("low-fx", 0, c.low_effects, "Low effects"))}</div>
+    <h2>New groups</h2>
+    <div class="card"><div class="gbody" style="border-top:0">
+      <div class="gside">${preview("New group", c.default_style, c.theme, false)}</div>
+      <div class="fields">
+        ${row("Look", lookName(c.default_style), `<span class="actions">${themeSelect("d-theme", 0)}</span>`)}
+        ${row("Icon size", "", seg("d-icon", 0, SIZES, c.default_style.icon, "Icon size"))}
+        ${row("Everything else", "Material, border, shadow, text and icons.", '<button class="btn" data-act="customise" data-id="0" data-v="">Customise…</button>')}
+      </div>
+      <div class="gfoot"><span>Gives every existing group this look, icon size included.</span><button class="btn" data-act="apply-all" data-id="0" data-v="">Apply to all groups</button></div>
+    </div></div>`,
+  themes: (c) => {
+    const hosts = c.fences.filter((f) => !isMember(f));
+    const card = (t) => {
+      const editing = renaming === t.name;
+      const where = `<select data-act="theme-apply" data-id="0" data-v="${esc(t.name)}" aria-label="Apply ${esc(t.name)}"><option value="">Apply to…</option><option value="all">All groups</option><option value="new">New groups</option>${hosts.map((h) => `<option value="${h.id}">${esc(h.title)}</option>`).join("")}</select>`;
+      return `<div class="tcard"><div class="stage ${stageClass("wall")}" style="${stageStyle("wall", null)}"><div style="zoom:.5">${groupHtml(t.style, { title: t.name, items: 3, width: 300, height: 190, theme: c.theme })}</div></div>
+        <div class="tcard-b"><div class="tcard-h">${editing
+          ? `<input type="text" maxlength="40" value="${esc(t.name)}" data-act="theme-name" data-id="0" data-v="${esc(t.name)}" aria-label="Theme name" spellcheck="false">`
+          : `<b title="${esc(t.name)}">${esc(t.name)}</b><span class="badge">${t.builtin ? "Built-in" : "Yours"}</span>`}</div>
+          ${where}
+          <span class="actions">
+            <button class="btn" data-act="theme-edit" data-id="0" data-v="${esc(t.name)}">Customise</button>
+            <button class="btn" data-act="theme-dup" data-id="0" data-v="${esc(t.name)}">Duplicate</button>
+            <button class="btn" data-act="theme-export" data-id="0" data-v="${esc(t.name)}">Export</button>
+            ${t.builtin ? "" : `<button class="btn" data-act="theme-rename" data-id="0" data-v="${esc(t.name)}">Rename</button>
+            <button class="btn quiet" data-act="theme-delete" data-id="0" data-v="${esc(t.name)}">${confirmTheme === t.name ? "Click again" : "Delete"}</button>`}
+          </span></div></div>`;
+    };
+    const mine = c.custom_themes || [];
+    return `
+    <div class="head"><div><h1>Themes</h1><p class="lede">Complete looks for a group: material, colours, border, shadow, text and icons. Applying one keeps each group's icon size.</p></div>
+      <span style="display:flex;gap:8px"><button class="btn" data-act="theme-import" data-id="0" data-v="">Import…</button><button class="btn primary" data-act="theme-new" data-id="0" data-v="">New theme</button></span></div>
+    <h2>Yours</h2>
+    ${mine.length ? `<div class="tgrid">${mine.map((t) => card({ ...t, builtin: false })).join("")}</div>` : `<p class="note" style="margin:0 2px 8px">Themes you save from the editor, duplicate or import appear here.</p>`}
+    <h2>Built in</h2>
+    <div class="tgrid">${S.themes.map((t) => card({ ...t, builtin: true })).join("")}</div>`;
+  },
+  editor: () => editorPage(),
+  behaviour: () => `
+    <div class="head"><div><h1>Behaviour</h1><p class="lede">Startup, shortcuts and housekeeping.</p></div></div>
+    <div class="card">${row("Start with Windows", "Runs Tessera when you sign in.", toggle("autostart", 0, S.autostart, "Start with Windows"))}</div>
+    <h2>Shortcuts</h2>
+    <div class="card">
+      ${row("Hide or show all groups", "", "<span><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>H</kbd></span>")}
+      ${row("Peek: float groups above windows", "", "<span><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Space</kbd></span>")}
+      ${row("Switch to profile 1 to 9", "", "<span><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Shift</kbd><kbd>1</kbd>…<kbd>9</kbd></span>")}
+      ${row("Roll a group up or down", "", '<span class="note">Double-click its title</span>')}
+    </div>
+    <h2>Housekeeping</h2>
+    <div class="card">${row("Rebuild groups by kind", "Discards every group's name, colour and position and sorts the desktop afresh. No files are touched.",
+      `<button class="btn ${confirmRebuild ? "danger" : ""}" data-act="rebuild" data-id="0" data-v="">${confirmRebuild ? "Click again to confirm" : "Rebuild…"}</button>`)}</div>`,
+  about: () => `
+    <div class="about-head"><img class="logo big" src="${S.icon}" alt="" width="56" height="56"><div><h1>Tessera</h1><p class="lede">Version ${esc(S.version)}</p></div></div>
+    <div class="card"><ul class="promises">
+      <li>${ICON.check}<span>Organising never moves your files or rewrites Explorer's own icon layout.</span></li>
+      <li>${ICON.check}<span>Runs outside Explorer. Quit Tessera and the desktop is exactly as it was.</span></li>
+      <li>${ICON.check}<span>No account, no telemetry, no network access.</span></li></ul></div>
+    <h2>Data</h2>
+    <div class="card">${row(`Layout and logs<span class="path">${esc(S.dataDir)}</span>`, "", '<button class="btn" data-act="open-data" data-id="0" data-v="">Open folder</button>')}</div>
+    <h2>Organiser</h2>
+    <div class="card">${row("Quit Tessera", "Closes the groups and brings Explorer's icons back.", '<button class="btn danger" data-act="quit" data-id="0" data-v="">Quit</button>')}</div>`,
+};
+
+function draw() {
+  pending = false;
+  const main = document.querySelector("main"), scroll = main.scrollTop, a = document.activeElement;
+  const focusKey = a && a.dataset && a.dataset.act ? `[data-act="${a.dataset.act}"][data-id="${a.dataset.id}"][data-v="${a.dataset.v}"]` : null;
+  if (page === "editor" && (!ED || !S.config || (ED.target.kind === "group" && !S.config.fences.some((f) => f.id === ED.target.id)))) { page = ED ? ED.from : "groups"; ED = null; }
+  const current = page === "editor" ? ED.from : page;
+  document.getElementById("page").className = "wrap" + (page === "editor" || page === "themes" ? " wide" : "");
+  document.getElementById("nav").innerHTML = PAGES.map(([id, label]) => `<button data-act="nav" data-id="0" data-v="${id}" aria-current="${id === current}">${ICON[id]}${label}</button>`).join("");
+  document.getElementById("dot").className = "dot" + (S.running ? " on" : "");
+  document.getElementById("statusText").textContent = S.running ? "Running" : "Not running";
+  let html = "";
+  if (!S.running) html += `<div class="banner" role="alert"><div><b>Tessera isn't running</b><span class="note">Changes can't be applied until it is.</span></div><button class="btn primary" data-act="start" data-id="0" data-v="">Start Tessera</button></div>`;
+  if (S.config) html += pages[page](S.config);
+  else if (page === "about" || page === "behaviour") html += pages[page]();
+  else html += `<div class="empty"><h1>No groups yet</h1><p class="lede">Start Tessera once and your groups will appear here.</p></div>`;
+  document.getElementById("page").innerHTML = html;
+  if (page === "editor" && ED) markSelected(false);
+  main.scrollTop = scroll;
+  justOpened = null;
+  // Rebuilding the page must not strand keyboard users: put focus back where it was. The pressed
+  // state may have flipped a toggle's value, so fall back to matching without it.
+  if (focusKey) (document.querySelector(focusKey) || document.querySelector(focusKey.replace(/\[data-v="[^"]*"\]$/, "")))?.focus({ preventScroll: true });
+}
+
+document.addEventListener("click", (e) => {
+  const pick = e.target.closest("#ed-stage .tg-i");
+  if (pick && ED) { ED.sel = [...pick.parentElement.children].indexOf(pick); markSelected(true); return; }
+  const el = e.target.closest("[data-act]");
+  if (!el || el.matches("input, select")) return;
+  const { act, v } = el.dataset, id = Number(el.dataset.id), path = el.dataset.id;
+  if (act !== "rebuild") confirmRebuild = false;
+  if (act !== "p-delete") confirmDelete = 0;
+  if (act !== "theme-delete") confirmTheme = null;
+  if (act === "nav" && ED) closeEditor(false);
+  switch (act) {
+    // ---- appearance editor
+    case "customise": openEditor(id ? { kind: "group", id } : { kind: "defaults" }); break;
+    case "ed": {
+      let value = v === "true" ? true : v === "false" ? false : /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v;
+      setp(ED.draft, path, value);
+      if (path === "shadow.kind") ED.draft.shadow = { kind: value, ...SHADOWS[value] };
+      if (path === "material" && WALL_MATS.includes(value) && !wallAsked) { wallAsked = true; post({ cmd: "wallpaper" }); }
+      edited(true); break;
+    }
+    case "ed-auto": if (getp(ED.draft, path)) { setp(ED.draft, path, null); edited(true); } break;
+    case "ed-reset": setp(ED.draft, path, clone(dflt(path))); edited(true); break;
+    case "ed-stop": {
+      const st = ED.draft.gradient.stops;
+      if (path === "add" && st.length < 3) st.push(st[st.length - 1]); else if (path === "remove" && st.length > 2) st.pop();
+      edited(true); break;
+    }
+    case "ed-tint": ED.draft.tint = v; ED.draft.color = null; ED.draft.accent = null; edited(true); break;
+    case "ed-bg": ED.bg = v; if (v === "wall" && !wallAsked) { wallAsked = true; post({ cmd: "wallpaper" }); } draw(); break;
+    case "ed-live":
+      ED.live = v === "true";
+      if (!ED.live && ED.sent) { post({ cmd: "look", id: ED.target.id, style: ED.original, quiet: true }); ED.sent = false; }
+      if (ED.live) previewLive();
+      draw(); break;
+    case "ed-default": ED.draft = { ...clone(DEFAULT()), icon: ED.draft.icon }; edited(true); break;
+    case "ed-save": ED.saving = ""; draw(); document.getElementById("ed-save-name")?.focus(); break;
+    case "ed-cancel": closeEditor(false); break;
+    case "ed-apply":
+      if (ED.target.kind === "theme" && ED.target.builtin) { post({ cmd: "theme_save", name: uniqueTheme(ED.target.name + " copy"), style: ED.draft }); toast("Saved as a new theme"); page = ED.from; ED = null; draw(); }
+      else closeEditor(true);
+      break;
+    // ---- theme library
+    case "theme-edit": { const t = findTheme(v); if (t) openEditor({ kind: "theme", name: t.name, builtin: t.builtin }); break; }
+    case "theme-new": { const name = uniqueTheme("My theme"); post({ cmd: "theme_save", name, style: S.config.default_style }); renaming = name; toast("New theme from the look for new groups"); break; }
+    case "theme-dup": { const t = findTheme(v); if (t) { const name = uniqueTheme(t.name + " copy"); post({ cmd: "theme_save", name, style: t.style }); renaming = name; } break; }
+    case "theme-export": { const t = findTheme(v); if (t) post({ cmd: "export_theme", name: t.name, style: t.style }); break; }
+    case "theme-import": post({ cmd: "import_theme" }); break;
+    case "theme-rename": renaming = v; draw(); { const i = document.querySelector('input[data-act="theme-name"]'); if (i) { i.focus(); i.select(); } } break;
+    case "theme-delete": if (confirmTheme === v) { confirmTheme = null; post({ cmd: "theme_delete", name: v }); } else { confirmTheme = v; draw(); } break;
+    case "low-fx": post({ cmd: "effects", low: v === "true" }); break;
+    case "tab-pick": post({ cmd: "tab_select", id }); break;
+    case "tab-add": focusTabOf = id; post({ cmd: "tab_add", id }); break;
+    case "tab-left": post({ cmd: "tab_move", id, delta: -1 }); break;
+    case "tab-right": post({ cmd: "tab_move", id, delta: 1 }); break;
+    case "tab-detach": post({ cmd: "tab_detach", id }); toast("The tab is now a group of its own, next to the original"); break;
+    case "tab-style": post({ cmd: "fence", id, tab_style: v }); break;
+    case "new-portal": post({ cmd: "new_portal" }); toast("Choose a folder in the dialog that opened"); break;
+    case "p-new": post({ cmd: "profile_new" }); toast("New profile created from the current layout"); break;
+    case "p-switch": open.clear(); post({ cmd: "profile_switch", id }); break;
+    case "p-delete": if (confirmDelete === id) { confirmDelete = 0; open.clear(); post({ cmd: "profile_delete", id }); } else { confirmDelete = id; draw(); } break;
+    case "nav": page = v; draw(); document.querySelector("main").scrollTop = 0; break;
+    case "open": if (open.has(id)) open.delete(id); else { open.add(id); justOpened = id; } draw(); break;
+    case "tint": post({ cmd: "fence", id, tint: v }); break;
+    case "icon": post({ cmd: "fence", id, icon: Number(v) }); break;
+    case "sort": post({ cmd: "fence", id, sort: v }); break;
+    case "collapsed": post({ cmd: "fence", id, collapsed: v === "true" }); break;
+    case "delete": open.delete(id); post({ cmd: "delete", id }); break;
+    case "new": awaitingNew = S.config ? S.config.fences.length : -1; post({ cmd: "new_group" }); break;
+    case "theme": post({ cmd: "theme", value: v }); break;
+    case "d-tint": post({ cmd: "defaults", tint: v }); break;
+    case "d-icon": post({ cmd: "defaults", icon: Number(v) }); break;
+    case "apply-all": post({ cmd: "apply_all" }); toast("Applied to every group"); break;
+    case "autostart": post({ cmd: "autostart", value: v === "true" }); break;
+    case "rebuild": if (confirmRebuild) { confirmRebuild = false; open.clear(); post({ cmd: "rebuild" }); } else { confirmRebuild = true; draw(); } break;
+    case "start": post({ cmd: "start" }); break;
+    case "open-data": post({ cmd: "open_data" }); break;
+    case "quit": post({ cmd: "quit" }); setTimeout(() => post({ cmd: "load" }), 700); break;
+  }
+});
+
+const SHADOWS = { None: { intensity: 0, blur: 0, offset: 0, spread: 0 }, Ambient: { intensity: 30, blur: 8, offset: 1, spread: 0 }, Soft: { intensity: 35, blur: 16, offset: 4, spread: 0 }, Floating: { intensity: 40, blur: 26, offset: 10, spread: -4 } };
+function uniqueTheme(base) {
+  const names = new Set(allThemes().map((t) => t.name.toLowerCase()));
+  let name = base.slice(0, 36), n = 2;
+  while (names.has(name.toLowerCase())) name = `${base.slice(0, 33)} ${n++}`;
+  return name;
+}
+window.setWallpaper = (url) => { WALL = url; wallAsked = true; if (S) draw(); };
+
+// Sliders preview live, in this window and on the desktop; at most one command per frame.
+let queued = null;
+document.addEventListener("input", (e) => {
+  const el = e.target;
+  if (el.dataset.act === "title") {
+    const label = el.closest(".gside")?.querySelector(".tg-t span, .tg-tabs b[style*=background]");
+    if (label) label.textContent = el.value;
+    return;
+  }
+  if (el.dataset.act === "ed" && el.matches("input[type=range]")) {
+    dragging = true;
+    const value = Number(el.value), min = Number(el.min), max = Number(el.max);
+    el.style.setProperty("--p", ((value - min) / (max - min)) * 100 + "%");
+    el.nextElementSibling.textContent = +value.toFixed(2) + (el.dataset.unit || "");
+    setp(ED.draft, el.dataset.id, value);
+    edited(false);
+    return;
+  }
+  if (el.dataset.act === "ed-color") {
+    setp(ED.draft, el.dataset.id, el.value);
+    el.closest(".colorctl")?.classList.remove("auto");
+    el.parentElement.querySelector(".pill")?.setAttribute("aria-pressed", "false");
+    edited(false);
+    return;
+  }
+  if (!el.matches("input[type=range]")) return;
+  dragging = true;
+  const opacity = Number(el.value), id = Number(el.dataset.id);
+  el.style.setProperty("--p", (opacity - 20) / 0.8 + "%");
+  el.nextElementSibling.textContent = opacity + "%";
+  const host = S.config.fences.find((f) => f.id === id);
+  host.style.opacity = opacity;   // local copy only: the organiser's answer replaces it
+  const stage = el.closest(".gbody")?.querySelector(".pv-stage");
+  if (stage) stage.outerHTML = preview(host.title, host.style, S.config.theme, host.collapsed);
+  const msg = { cmd: "fence", id, opacity };
+  if (!queued) requestAnimationFrame(() => { post(queued); queued = null; });
+  queued = msg;
+});
+document.addEventListener("change", (e) => {
+  const el = e.target, id = Number(el.dataset.id), act = el.dataset.act;
+  const theme = el.matches("select") && el.value ? findTheme(el.value) : null;
+  if (act === "look-theme" && theme) { const host = S.config.fences.find((f) => f.id === id); post({ cmd: "look", id, style: { ...clone(theme.style), icon: host.style.icon } }); toast(`${theme.name} applied`); return; }
+  if (act === "d-theme" && theme) { post({ cmd: "look_defaults", style: { ...clone(theme.style), icon: S.config.default_style.icon } }); return; }
+  if (act === "ed-theme" && theme) { ED.draft = { ...clone(theme.style), icon: ED.draft.icon }; if (WALL_MATS.includes(ED.draft.material) && !wallAsked) { wallAsked = true; post({ cmd: "wallpaper" }); } edited(true); return; }
+  if (act === "theme-apply" && el.value) {
+    const t = findTheme(el.dataset.v);
+    if (!t) return;
+    if (el.value === "all") { post({ cmd: "look_all", style: t.style }); toast(`${t.name} applied to every group`); }
+    else if (el.value === "new") { post({ cmd: "look_defaults", style: { ...clone(t.style), icon: S.config.default_style.icon } }); toast(`New groups will use ${t.name}`); }
+    else { const host = S.config.fences.find((f) => f.id === Number(el.value)); post({ cmd: "look", id: host.id, style: { ...clone(t.style), icon: host.style.icon } }); toast(`${t.name} applied to ${host.title}`); }
+    return;
+  }
+  if (act === "ed-select") { setp(ED.draft, el.dataset.id, el.value); edited(true); return; }
+  if (act === "ed" && el.matches("input[type=range]")) { dragging = false; if (pending) setTimeout(draw, 50); return; }
+  if (act === "ed-color") { drawStage(); return; }
+  if (act === "theme-name") { const to = el.value.trim(); renaming = null; if (to && to !== el.dataset.v) post({ cmd: "theme_rename", from: el.dataset.v, to }); else draw(); return; }
+  if (el.matches("input[type=range]")) { dragging = false; if (pending) setTimeout(draw, 50); }
+  else if (el.dataset.act === "rule") post({ cmd: "rule", id, category: el.value || null });
+  else if (el.dataset.act === "tab-merge" && el.value) {
+    const into = Number(el.value);
+    open.delete(id); open.add(into); justOpened = into;
+    post({ cmd: "tab_merge", id, into });
+    toast("Combined. Its tabs are now part of the other group");
+  }
+  else if (el.dataset.act === "title") post({ cmd: "fence", id, title: el.value });
+  else if (el.dataset.act === "p-name") post({ cmd: "profile_rename", id, name: el.value });
+});
+document.addEventListener("keydown", (e) => {
+  if (!e.target.matches("input[type=text]")) return;
+  if (e.target.id === "ed-save-name") {
+    if (e.key === "Enter" && e.target.value.trim()) {
+      const name = e.target.value.trim();
+      if (S.themes.some((t) => t.name.toLowerCase() === name.toLowerCase())) { toast("That name belongs to a built-in theme"); return; }
+      post({ cmd: "theme_save", name, style: ED.draft }); toast(`Saved “${name}”`); ED.saving = null; draw();
+    }
+    if (e.key === "Escape") { ED.saving = null; draw(); }
+    return;
+  }
+  if (e.key === "Enter") e.target.blur();
+  if (e.key === "Escape") { e.target.value = e.target.defaultValue; e.target.blur(); }
+});
+document.addEventListener("focusout", (e) => { if (e.target.matches("input[type=text]") && pending) setTimeout(draw, 0); });
+document.addEventListener("contextmenu", (e) => { if (!e.target.matches("input[type=text]")) e.preventDefault(); });
+
+post({ cmd: "load" });
+post({ cmd: "wallpaper" });   // for honest previews of wallpaper materials; arrives a moment later
+wallAsked = true;
+</script>
+</body>
+</html>

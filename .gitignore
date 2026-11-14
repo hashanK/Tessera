@@ -1,0 +1,10 @@
+# Build output (Cargo puts every build here, including the spikes)
+target/
+**/target/
+
+# Installer builds: publish these as GitHub releases, not in the repository
+dist/
+
+# Portable-mode data and logs from test runs
+data/
+*.log
