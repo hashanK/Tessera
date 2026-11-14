@@ -117,6 +117,7 @@ A group lists other groups in `tabs` and remembers which one is in front (`activ
 ### ADR-17 — A mouse hook only while something is selected
 Clicking the bare desktop must clear the selection, as it does on the native desktop, but Windows tells no one else about a click on the desktop window. So while an item is selected, and only then, Tessera installs a low-level mouse hook (`WH_MOUSE_LL`). Its callback only posts a message when a button goes down over a window of another process. The selection then clears and the hook is removed. With nothing selected, there is no hook.
 *Rejected:* a permanent hook (system-wide cost for a rare event), and the foreground-change event, which doesn't fire when the desktop was already in front.
+*Keys:* a keyboard hook (`WH_KEYBOARD_LL`) follows the same rule: it exists only while an item is selected. It acts on Delete, Shift+Delete and Enter, and only when the desktop or one of Tessera's windows is the active window. Deleting uses the item's own shell "delete" verb, so the Recycle Bin, Explorer's confirmation setting and undo all behave as on the native desktop. Clicking an icon makes the desktop the active window, as clicking the native desktop does, so the keys reach it.
 
 ## Recovery behaviour
 

@@ -435,6 +435,32 @@ pub fn menu_message(msg: u32, wp: WPARAM, lp: LPARAM) -> bool {
     }
 }
 
+/// Run an item's own "delete" verb, exactly as Explorer does for the Delete key: to the Recycle
+/// Bin (Explorer's confirmation and undo apply), or permanently with `permanent` (Shift+Delete).
+pub fn delete(hwnd: HWND, pidl: &Pidl, permanent: bool) -> Result<()> {
+    unsafe {
+        let mut child = std::ptr::null_mut();
+        let parent: IShellFolder = SHBindToParent(pidl.as_ptr(), Some(&mut child))?;
+        let menu: IContextMenu = parent.GetUIObjectOf(hwnd, &[child as *const ITEMIDLIST], None)?;
+        // Some handlers only accept a verb after building their menu.
+        let popup = CreatePopupMenu()?;
+        let _ = menu.QueryContextMenu(popup, 0, 1, 0x7FFF, CMF_NORMAL);
+        let info = CMINVOKECOMMANDINFOEX {
+            cbSize: std::mem::size_of::<CMINVOKECOMMANDINFOEX>() as u32,
+            // CMIC_MASK_UNICODE, plus CMIC_MASK_SHIFT_DOWN for a permanent delete.
+            fMask: 0x4000 | if permanent { 0x1000_0000 } else { 0 },
+            hwnd,
+            lpVerb: windows::core::s!("delete"),
+            lpVerbW: w!("delete"),
+            nShow: SW_SHOWNORMAL.0,
+            ..Default::default()
+        };
+        let result = menu.InvokeCommand(&info as *const _ as *const CMINVOKECOMMANDINFO);
+        let _ = DestroyMenu(popup);
+        result
+    }
+}
+
 /// Show the real shell context menu for an item and run whatever the user picks.
 pub fn context_menu(hwnd: HWND, pidl: &Pidl, pt: POINT) -> Result<()> {
     unsafe {

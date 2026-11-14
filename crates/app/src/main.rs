@@ -42,6 +42,8 @@ const WM_PICK_PORTAL: u32 = WM_APP + 6;
 const WM_OPEN_SETTINGS: u32 = WM_APP + 7;
 /// A click landed outside every group while an item was selected.
 const WM_CLICK_OUTSIDE: u32 = WM_APP + 8;
+/// Delete or Enter pressed on the desktop while an item is selected (wParam: key, lParam: Shift).
+const WM_ITEM_KEY: u32 = WM_APP + 9;
 /// Hotkey ids HOTKEY_PROFILE+1 ..= +9 switch to the first nine profiles (Ctrl+Alt+Shift+digit).
 const HOTKEY_PROFILE: i32 = 10;
 
@@ -714,6 +716,26 @@ impl App {
         watch_outside_clicks(self.main, index.is_some());
     }
 
+    /// Delete / Shift+Delete / Enter pressed on the desktop while an item is selected.
+    fn item_key(&mut self, key: VIRTUAL_KEY, shift: bool) {
+        let Some((host, index)) = self.ui.iter().find_map(|(id, ui)| ui.selected.map(|i| (*id, i))) else { return };
+        let Some(key_name) = self.cfg.fence(self.cfg.shown_tab(host)).and_then(|f| f.items.get(index)).cloned() else { return };
+        let (Some(item), Some(hwnd)) = (self.items.get(&key_name), self.hwnd(host)) else { return };
+        let pidl = item.pidl.clone();
+        if key == VK_RETURN {
+            shell::open(hwnd, &pidl);
+        } else if key == VK_DELETE {
+            // System items (This PC, Recycle Bin, Network…) aren't files; the Delete key leaves them alone.
+            if key_name.starts_with("::") {
+                return;
+            }
+            self.clear_selection();
+            if let Err(e) = shell::delete(hwnd, &pidl, shift) {
+                log(&format!("delete failed: {e}"));
+            }
+        }
+    }
+
     /// The user clicked somewhere that isn't a group (the bare desktop, another program): like
     /// on the native desktop, nothing stays selected.
     fn clear_selection(&mut self) {
@@ -743,6 +765,13 @@ impl App {
             }
             Zone::Item(index) => {
                 self.select(id, Some(index));
+                // As on the native desktop, clicking an icon makes the desktop the active window,
+                // so keys (Delete, Enter) go to it rather than to the last program used.
+                if let Some(desktop) = shell::desktop_host() {
+                    unsafe {
+                        let _ = SetForegroundWindow(desktop);
+                    }
+                }
                 Drag::Pending { id, index, px: pt.x, py: pt.y }
             }
             Zone::Body => Drag::None,
@@ -1723,20 +1752,60 @@ unsafe extern "system" fn fence_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
 static OUTSIDE_HOOK: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
 static OUTSIDE_NOTIFY: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
 
+/// The keyboard twin of the mouse hook: while an item is selected and the desktop is the active
+/// window, Delete, Shift+Delete and Enter act on the item. Keys in any other program pass
+/// straight through.
+static KEY_HOOK: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+
 fn watch_outside_clicks(main: HWND, on: bool) {
-    let hook = OUTSIDE_HOOK.load(Ordering::Relaxed);
     unsafe {
-        if on && hook == 0 {
-            OUTSIDE_NOTIFY.store(main.0 as isize, Ordering::Relaxed);
-            let module = GetModuleHandleW(None).ok().map(HINSTANCE::from);
-            if let Ok(h) = SetWindowsHookExW(WH_MOUSE_LL, Some(outside_click), module, 0) {
-                OUTSIDE_HOOK.store(h.0 as isize, Ordering::Relaxed);
+        let module = GetModuleHandleW(None).ok().map(HINSTANCE::from);
+        for (slot, kind, proc_) in [
+            (&OUTSIDE_HOOK, WH_MOUSE_LL, outside_click as unsafe extern "system" fn(i32, WPARAM, LPARAM) -> LRESULT),
+            (&KEY_HOOK, WH_KEYBOARD_LL, desktop_key),
+        ] {
+            let hook = slot.load(Ordering::Relaxed);
+            if on && hook == 0 {
+                OUTSIDE_NOTIFY.store(main.0 as isize, Ordering::Relaxed);
+                if let Ok(h) = SetWindowsHookExW(kind, Some(proc_), module, 0) {
+                    slot.store(h.0 as isize, Ordering::Relaxed);
+                }
+            } else if !on && hook != 0 {
+                let _ = UnhookWindowsHookEx(HHOOK(hook as *mut _));
+                slot.store(0, Ordering::Relaxed);
             }
-        } else if !on && hook != 0 {
-            let _ = UnhookWindowsHookEx(HHOOK(hook as *mut _));
-            OUTSIDE_HOOK.store(0, Ordering::Relaxed);
         }
     }
+}
+
+/// The desktop (or one of our own windows) is the active window: keys are meant for the icons.
+unsafe fn desktop_is_active() -> bool {
+    let fg = GetForegroundWindow();
+    if fg.is_invalid() {
+        return true;
+    }
+    let mut pid = 0;
+    GetWindowThreadProcessId(fg, Some(&mut pid));
+    if pid == std::process::id() {
+        return true;
+    }
+    let mut class = [0u16; 32];
+    let n = GetClassNameW(fg, &mut class) as usize;
+    matches!(String::from_utf16_lossy(&class[..n]).as_str(), "Progman" | "WorkerW")
+}
+
+unsafe extern "system" fn desktop_key(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    if code >= 0 && matches!(wp.0 as u32, WM_KEYDOWN | WM_SYSKEYDOWN) {
+        let info = &*(lp.0 as *const KBDLLHOOKSTRUCT);
+        let key = VIRTUAL_KEY(info.vkCode as u16);
+        if (key == VK_DELETE || key == VK_RETURN) && desktop_is_active() {
+            let shift = GetAsyncKeyState(VK_SHIFT.0 as i32) < 0;
+            let main = HWND(OUTSIDE_NOTIFY.load(Ordering::Relaxed) as *mut _);
+            let _ = PostMessageW(Some(main), WM_ITEM_KEY, WPARAM(key.0 as usize), LPARAM(shift as isize));
+            return LRESULT(1); // handled: the desktop window doesn't also get it
+        }
+    }
+    CallNextHookEx(None, code, wp, lp)
 }
 
 unsafe extern "system" fn outside_click(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
@@ -1786,6 +1855,7 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
         },
         WM_OPEN_SETTINGS => app.open_settings(),
         WM_CLICK_OUTSIDE => app.clear_selection(),
+        WM_ITEM_KEY => app.item_key(VIRTUAL_KEY(wp.0 as u16), lp.0 != 0),
         WM_COPYDATA => {
             let data = &*(lp.0 as *const COPYDATASTRUCT);
             if data.dwData != COPYDATA_MAGIC || data.lpData.is_null() {
@@ -2001,6 +2071,9 @@ unsafe fn run() -> Result<()> {
     }
     app.attach_to_shell();
     app.refresh_portals(None);
+    // If the desktop is already in front (Show Desktop), put the groups above it now: no
+    // foreground change will arrive to do it.
+    app.follow_desktop(true);
     app.dirty();
     for n in 1..=9 {
         let _ = RegisterHotKey(Some(main), HOTKEY_PROFILE + n, MOD_CONTROL | MOD_ALT | MOD_SHIFT | MOD_NOREPEAT, '0' as u32 + n as u32);
