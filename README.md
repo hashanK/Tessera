@@ -8,7 +8,7 @@ Website: https://hashank.github.io/Tessera/
 
 ## Install
 
-Run `tessera-setup-<version>.exe`: download it from the repository's Releases page, or build it with the command below (it lands in `dist\`). It installs for your account only (no administrator prompt) into `%LOCALAPPDATA%\Programs\Tessera`, adds Start menu entries for Tessera and Tessera Settings, and lists Tessera in Settings → Apps so it can be uninstalled from there. A tick box decides whether it starts when you sign in. Uninstalling keeps your groups unless you tick "Also delete my groups, profiles and settings".
+Run `tessera-setup.exe`: download it from the [website](https://hashank.github.io/Tessera/) or the [latest release](https://github.com/hashanK/Tessera/releases/latest), or build it with the command below (it lands in `dist\`). Pushing a version tag such as `v0.1.0` builds and publishes a release automatically (`.github/workflows/release.yml`). It installs for your account only (no administrator prompt) into `%LOCALAPPDATA%\Programs\Tessera`, adds Start menu entries for Tessera and Tessera Settings, and lists Tessera in Settings → Apps so it can be uninstalled from there. A tick box decides whether it starts when you sign in. Uninstalling keeps your groups unless you tick "Also delete my groups, profiles and settings".
 
 To build the installer yourself:
 

@@ -27,7 +27,8 @@ jobs:
       - name: Rust toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - name: Run the tests
-        run: cargo test --workspace --release
+        # The installer crate is left out: it packages the release programs, which the next step builds first.
+        run: cargo test --workspace --exclude tessera-setup --release
       - name: Build the installer
         shell: pwsh
         run: |
