@@ -3,6 +3,8 @@ name = "tessera-setup"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
 
 # Builds tessera-setup.exe: a per-user installer that carries the release builds of
 # tessera.exe and tessera-settings.exe inside it. Build with `scripts\package.ps1`, which

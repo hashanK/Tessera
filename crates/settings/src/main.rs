@@ -28,6 +28,8 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 use wry::{WebContext, WebViewBuilder};
 
 const TITLE: &str = "Tessera Settings";
+/// Shown under the developer's name on the About page.
+const AUTHOR_ROLE: &str = "Senior Software Engineer · Sri Lanka";
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -84,6 +86,9 @@ fn state(error: Option<&str>) -> Value {
         "running": organiser().is_some(),
         "autostart": autostart(),
         "version": env!("CARGO_PKG_VERSION"),
+        "author": env!("CARGO_PKG_AUTHORS"),
+        "authorRole": AUTHOR_ROLE,
+        "repository": env!("CARGO_PKG_REPOSITORY"),
         "dataDir": dir.display().to_string(),
         "config": config,
         "tints": Tint::ALL.iter().map(|t| json!({ "name": t.name(), "rgb": t.rgb() })).collect::<Vec<_>>(),
@@ -194,6 +199,10 @@ fn handle_command(msg: &Value, body: &str) -> Option<&'static str> {
                     std::thread::sleep(std::time::Duration::from_millis(50));
                 }
             }
+        }
+        // Only ever the project's own page: the page can't ask for any other address.
+        Some("open_repository") => {
+            let _ = Command::new("explorer").arg(env!("CARGO_PKG_REPOSITORY")).spawn();
         }
         Some("open_data") => {
             let _ = Command::new("explorer").arg(store::data_dir()).spawn();

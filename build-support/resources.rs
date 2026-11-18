@@ -82,12 +82,14 @@ fn version_info(description: &str, file_name: &str, version: &str) -> Vec<u8> {
         fixed.extend_from_slice(&d.to_le_bytes());
     }
     let dotted = format!("{}.{}.{}.0", v[0], v[1], v[2]);
+    let author = std::env::var("CARGO_PKG_AUTHORS").unwrap_or_default().replace(':', ", ");
+    let copyright = format!("\u{a9} 2026 {author}. Free software under the MIT License.");
     let strings: Vec<Vec<u8>> = [
-        ("CompanyName", "Tessera"),
+        ("CompanyName", author.as_str()),
         ("FileDescription", description),
         ("FileVersion", dotted.as_str()),
         ("InternalName", file_name),
-        ("LegalCopyright", "MIT licence"),
+        ("LegalCopyright", copyright.as_str()),
         ("OriginalFilename", &format!("{file_name}.exe")),
         ("ProductName", "Tessera"),
         ("ProductVersion", version),

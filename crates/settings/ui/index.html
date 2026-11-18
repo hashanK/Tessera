@@ -844,7 +844,13 @@ const pages = {
     <div class="card"><ul class="promises">
       <li>${ICON.check}<span>Organising never moves your files or rewrites Explorer's own icon layout.</span></li>
       <li>${ICON.check}<span>Runs outside Explorer. Quit Tessera and the desktop is exactly as it was.</span></li>
-      <li>${ICON.check}<span>No account, no telemetry, no network access.</span></li></ul></div>
+      <li>${ICON.check}<span>No account, no telemetry, no network access.</span></li>
+      <li>${ICON.check}<span>Free and open source, for everyone.</span></li></ul></div>
+    <h2>Developer</h2>
+    <div class="card">
+      ${row(`<b>${esc(S.author)}</b><small>${esc(S.authorRole)}</small>`, "", '<button class="btn" data-act="open-repo" data-id="0" data-v="">View on GitHub</button>')}
+      ${row("Free and open source", `Released under the MIT License: free for anyone to use, share and change. © 2026 ${esc(S.author)}.<span class="path">${esc(S.repository)}</span>`, "")}
+    </div>
     <h2>Data</h2>
     <div class="card">${row(`Layout and logs<span class="path">${esc(S.dataDir)}</span>`, "", '<button class="btn" data-act="open-data" data-id="0" data-v="">Open folder</button>')}</div>
     <h2>Organiser</h2>
@@ -951,6 +957,7 @@ document.addEventListener("click", (e) => {
     case "rebuild": if (confirmRebuild) { confirmRebuild = false; open.clear(); post({ cmd: "rebuild" }); } else { confirmRebuild = true; draw(); } break;
     case "start": post({ cmd: "start" }); break;
     case "open-data": post({ cmd: "open_data" }); break;
+    case "open-repo": post({ cmd: "open_repository" }); break;
     case "quit": post({ cmd: "quit" }); setTimeout(() => post({ cmd: "load" }), 700); break;
   }
 });

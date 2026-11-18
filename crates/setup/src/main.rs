@@ -26,6 +26,8 @@ use windows::Win32::UI::Shell::{FOLDERID_Programs, FOLDERID_UserProgramFiles, IS
 use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowThreadProcessId, PostMessageW, IDCANCEL, WM_CLOSE};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
+const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 const TITLE: &str = "Tessera Setup";
 const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Tessera";
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -69,7 +71,7 @@ fn install(silent: bool, autostart_flag: bool) -> i32 {
             None => format!("Install Tessera {VERSION}"),
         };
         let content = format!(
-            "Tessera sorts your desktop icons into groups. It installs for your account only, so it doesn't need administrator rights.\n\nInstall folder: {}",
+            "Tessera sorts your desktop icons into groups. It installs for your account only, so it doesn't need administrator rights.\n\nInstall folder: {}\n\nBy {AUTHOR}. Free and open source under the MIT License.",
             dir.display()
         );
         let footer = (!webview2_present()).then_some(
@@ -134,10 +136,12 @@ fn install_files(dir: &Path, autostart: bool) -> R<()> {
 
     let exe = dir.join("tessera.exe");
     let uninstall = format!("\"{}\" --uninstall", uninstaller.display());
-    let values: [(&str, Value); 10] = [
+    let values: [(&str, Value); 12] = [
         ("DisplayName", Value::Str("Tessera".into())),
         ("DisplayVersion", Value::Str(VERSION.into())),
-        ("Publisher", Value::Str("Tessera".into())),
+        ("Publisher", Value::Str(AUTHOR.into())),
+        ("URLInfoAbout", Value::Str(REPOSITORY.into())),
+        ("HelpLink", Value::Str(REPOSITORY.into())),
         ("DisplayIcon", Value::Str(format!("{},0", exe.display()))),
         ("InstallLocation", Value::Str(dir.display().to_string())),
         ("UninstallString", Value::Str(uninstall.clone())),

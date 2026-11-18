@@ -2,7 +2,7 @@
 
 Desktop icon groups for Windows 10/11. A small native Rust program that sorts your desktop icons into quiet, translucent groups — without moving your files, without touching Explorer's own layout, and without running inside Explorer.
 
-*Tessera is a working title.*
+Made by **Hashan Kannangara**, Senior Software Engineer, Sri Lanka. Free and open source under the [MIT License](LICENSE).
 
 ## Install
 
@@ -172,3 +172,9 @@ Not built yet: rubber-band (drag a box) selection, a selection spanning several 
 | `docs/research.md` | Competitive research and feasibility results. |
 | `docs/architecture.md` | Architecture and decision log. |
 | `docs/design.md` | MVP definition, journeys, identity and tokens. |
+
+## Author and licence
+
+Tessera is made by **Hashan Kannangara**, Senior Software Engineer, Sri Lanka. Project page: https://github.com/hashanK/Tessera
+
+It is free and open source under the [MIT License](LICENSE): anyone may use, copy, change and share it, including commercially, as long as the copyright notice and licence travel with it.

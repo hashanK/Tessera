@@ -8,6 +8,9 @@ exclude = ["spikes"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+authors = ["Hashan Kannangara"]
+repository = "https://github.com/hashanK/Tessera"
+description = "Desktop icon groups for Windows"
 
 [profile.release]
 opt-level = "s"
