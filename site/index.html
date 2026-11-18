@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tessera — desktop icon groups for Windows</title>
+<meta name="description" content="Tessera sorts your Windows desktop icons into calm, glassy groups. Free and open source. Never moves your files.">
+<meta name="theme-color" content="#0a0e1c">
+<meta property="og:title" content="Tessera — desktop icon groups for Windows">
+<meta property="og:description" content="Sort your desktop icons into calm, glassy groups. Free, open source, and light as air.">
+<meta property="og:image" content="icon.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1c; --bg2: #0f1428; --card: #12182e; --line: #ffffff14; --line2: #ffffff24;
+    --ink: #eef1fb; --dim: #a4abc4; --faint: #6d7592;
+    --blue: #5b7cff; --cyan: #5ee2ff; --violet: #9a7bff; --pink: #ff6fb1;
+    --glow: radial-gradient(60% 60% at 50% 40%, #5b7cff33, transparent 70%);
+    --radius: 18px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5f6fb; --bg2: #eceffa; --card: #ffffff; --line: #0b10200f; --line2: #0b10201f;
+      --ink: #0e1222; --dim: #4b5372; --faint: #7a829d;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: inherit; }
+  h1, h2, h3 { font-family: Sora, "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: -.02em; margin: 0; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+  .grad { background: linear-gradient(100deg, var(--cyan), var(--blue) 45%, var(--violet) 75%, var(--pink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  /* ---- nav ---- */
+  nav { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(14px) saturate(1.4); background: color-mix(in srgb, var(--bg) 72%, transparent); border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 600 18px Sora, sans-serif; text-decoration: none; }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  nav .links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; color: var(--dim); }
+  nav .links a { text-decoration: none; transition: color .15s; }
+  nav .links a:hover { color: var(--ink); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 12px; padding: 11px 20px; font: 600 15px Inter, sans-serif; text-decoration: none; border: 1px solid var(--line2); background: var(--card); color: var(--ink); transition: transform .15s, box-shadow .2s, border-color .2s; cursor: pointer; }
+  .btn:hover { transform: translateY(-1px); border-color: var(--faint); }
+  .btn.primary { border: 0; color: #fff; background: linear-gradient(120deg, var(--blue), var(--violet)); box-shadow: 0 10px 30px -10px #5b7cffaa, inset 0 1px 0 #ffffff40; }
+  .btn.primary:hover { box-shadow: 0 16px 40px -12px #5b7cffcc, inset 0 1px 0 #ffffff40; }
+  .btn svg { width: 18px; height: 18px; }
+  nav .btn { padding: 8px 14px; font-size: 14px; }
+
+  /* ---- hero ---- */
+  .hero { position: relative; padding: 72px 0 40px; }
+  .hero::before { content: ""; position: absolute; inset: -200px 0 auto; height: 700px; background: radial-gradient(50% 50% at 30% 30%, #5b7cff30, transparent 70%), radial-gradient(40% 40% at 75% 20%, #9a7bff26, transparent 70%); pointer-events: none; }
+  .hero .wrap { position: relative; display: grid; grid-template-columns: 1fr 1.15fr; gap: 56px; align-items: center; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); border: 1px solid var(--line2); border-radius: 999px; padding: 5px 12px 5px 6px; background: var(--card); }
+  .eyebrow b { font-weight: 600; color: #fff; background: linear-gradient(120deg, var(--blue), var(--violet)); border-radius: 999px; padding: 1px 9px; font-size: 12px; }
+  .hero h1 { font-size: clamp(40px, 5.6vw, 66px); line-height: 1.04; margin: 18px 0 18px; }
+  .hero p.lede { font-size: 19px; color: var(--dim); max-width: 520px; margin: 0 0 28px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .meta { margin-top: 18px; font-size: 13px; color: var(--faint); display: flex; gap: 14px; flex-wrap: wrap; }
+  .meta span::before { content: "•"; margin-right: 14px; color: var(--line2); }
+  .meta span:first-child::before { content: none; }
+
+  /* ---- the live desktop ---- */
+  .screen { position: relative; aspect-ratio: 16 / 10.5; border-radius: 16px; overflow: hidden; box-shadow: 0 40px 80px -30px #000c, 0 0 0 1px var(--line2), 0 0 0 10px #ffffff06; transform: perspective(1800px) rotateY(-7deg) rotateX(3deg); transition: transform .6s; }
+  .screen:hover { transform: perspective(1800px) rotateY(-2deg) rotateX(1deg); }
+  .wall { position: absolute; inset: 0; transition: background 1.6s ease; }
+  .wall::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 60% at 50% 120%, #00000055, transparent 60%); }
+  .hills { position: absolute; inset: auto 0 0; height: 55%; transition: filter 1.6s; }
+  .taskbar { position: absolute; left: 0; right: 0; bottom: 0; height: 7.5%; background: #0a0e1cbb; backdrop-filter: blur(18px); display: flex; justify-content: center; align-items: center; gap: 1.6%; }
+  .taskbar i { width: 2.6%; aspect-ratio: 1; border-radius: 22%; background: #ffffff30; }
+  .taskbar i:first-child { background: linear-gradient(135deg, #5ee2ff, #5b7cff); }
+  .g { position: absolute; border-radius: 10px; padding: 1.2% 1.4%; background: color-mix(in srgb, var(--tint, #1a2240) 55%, transparent); backdrop-filter: blur(14px) saturate(1.3); box-shadow: inset 0 1px 0 #ffffff26, inset 0 0 0 1px #ffffff14, 0 12px 28px -10px #0008; transition: background 1.6s ease; }
+  .g h4 { margin: 0 0 4%; font: 600 clamp(7px, .9vw, 11px) Inter, sans-serif; color: #fff; opacity: .9; }
+  .g .icons { display: grid; grid-template-columns: repeat(var(--cols, 3), 1fr); gap: 6% 4%; }
+  .g .icons span { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: clamp(5px, .62vw, 8px); color: #fffd; white-space: nowrap; }
+  .g .icons svg { width: 70%; max-width: 34px; aspect-ratio: 1; }
+  .g.tabs h4 { display: flex; gap: 4px; }
+  .g.tabs h4 em { font-style: normal; padding: 1px 7px; border-radius: 999px; opacity: .6; transition: background .4s, opacity .4s; }
+  .g.tabs h4 em.on { background: color-mix(in srgb, var(--accent, #5b7cff) 70%, transparent); opacity: 1; }
+  .drag { position: absolute; width: 3.6%; aspect-ratio: 1; pointer-events: none; animation: drag 9s ease-in-out infinite; filter: drop-shadow(0 6px 8px #0008); z-index: 3; }
+  .cursor { position: absolute; width: 2.2%; pointer-events: none; z-index: 4; animation: cursor 9s ease-in-out infinite; }
+  @keyframes drag { 0%, 18% { left: 15.7%; top: 19%; opacity: 0; transform: scale(1); } 22% { opacity: 1; transform: scale(1.12); } 52% { left: 69%; top: 52%; opacity: 1; transform: scale(1.12); } 58%, 100% { left: 69%; top: 52%; opacity: 0; transform: scale(1); } }
+  @keyframes cursor { 0%, 14% { left: 30%; top: 40%; } 20% { left: 17.5%; top: 22%; } 52% { left: 71%; top: 55%; } 64%, 100% { left: 78%; top: 70%; } }
+  .chip-wall { position: absolute; left: 3%; bottom: 10%; display: flex; gap: 4px; align-items: center; font: 500 clamp(6px, .7vw, 10px) Inter, sans-serif; color: #fff; background: #0006; padding: 4px 8px 4px 6px; border-radius: 999px; backdrop-filter: blur(8px); }
+  .chip-wall i { width: 9px; height: 9px; border-radius: 50%; background: var(--tint); box-shadow: 0 0 0 1px #fff6; transition: background 1.6s; }
+
+  /* ---- sections ---- */
+  section { padding: 90px 0; position: relative; }
+  .kicker { font: 600 13px Inter, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); }
+  section h2 { font-size: clamp(30px, 3.6vw, 44px); line-height: 1.12; margin: 10px 0 14px; }
+  section p.sub { color: var(--dim); font-size: 18px; max-width: 640px; margin: 0; }
+  .head { margin-bottom: 44px; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; position: relative; overflow: hidden; transition: transform .25s, border-color .25s; }
+  .card:hover { transform: translateY(-3px); border-color: var(--line2); }
+  .card::before { content: ""; position: absolute; inset: -40% -40% auto auto; width: 70%; aspect-ratio: 1; background: radial-gradient(closest-side, var(--hue, #5b7cff33), transparent); opacity: .7; }
+  .card h3 { font-size: 18px; margin: 14px 0 6px; position: relative; }
+  .card p { margin: 0; color: var(--dim); font-size: 15px; position: relative; }
+  .ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(135deg, #ffffff14, #ffffff05); border: 1px solid var(--line2); position: relative; }
+  .ico svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; color: var(--c, var(--cyan)); }
+  .card.wide { grid-column: span 2; }
+
+  /* ---- materials playground ---- */
+  .play { display: grid; grid-template-columns: 1.2fr 1fr; gap: 32px; align-items: center; }
+  .stage { position: relative; aspect-ratio: 4 / 3; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line2); background:
+      radial-gradient(28% 32% at 22% 30%, #ffb44a, transparent 70%),
+      radial-gradient(30% 36% at 78% 26%, #ff5d8f, transparent 70%),
+      radial-gradient(40% 40% at 55% 85%, #3fd3ff, transparent 70%),
+      radial-gradient(30% 30% at 20% 85%, #6f5bff, transparent 70%),
+      linear-gradient(160deg, #1b1d3a, #0d1a2f); }
+  .stage::before { content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(90deg, #ffffff14 0 2px, transparent 2px 38px), repeating-linear-gradient(0deg, #ffffff10 0 2px, transparent 2px 38px); }
+  .stage .demo { position: absolute; inset: 16% 14%; border-radius: var(--r, 14px); padding: 4% 5%; transition: all .45s ease; }
+  .stage .demo h4 { margin: 0 0 6%; font: 600 15px Inter, sans-serif; color: var(--t, #fff); transition: color .45s; }
+  .stage .demo .icons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 6px; }
+  .stage .demo .icons span { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; color: var(--t, #fff); transition: color .45s; }
+  .stage .demo svg { width: 46px; height: 46px; }
+  .demo.acrylic { background: color-mix(in srgb, #10131c 58%, transparent); backdrop-filter: blur(22px) saturate(1.2); box-shadow: inset 0 1px 0 #ffffff30, inset 0 0 0 1px #ffffff1c, 0 18px 40px -16px #000a; }
+  .demo.frosted { background: linear-gradient(#ffffff1f, #ffffff1f), color-mix(in srgb, #f4f6fa 42%, transparent); backdrop-filter: blur(20px); box-shadow: inset 0 1px 0 #ffffffaa, inset 0 0 0 1px #ffffff66, 0 18px 40px -16px #0007; --t: #16181d; }
+  .demo.mica { background: color-mix(in srgb, #202020 72%, transparent); backdrop-filter: blur(60px) saturate(1.5); box-shadow: inset 0 0 0 1px #ffffff14, 0 6px 18px -8px #0009; --r: 8px; }
+  .demo.gradient { background: linear-gradient(120deg, #0b3d5cd0, #06213ad0 55%, #041427d0); box-shadow: inset 0 0 0 1px #38c6d940, 0 24px 50px -18px #000c; }
+  .demo.solid { background: #f2efe8; box-shadow: inset 0 0 0 1.5px #c9b48a, 0 18px 40px -16px #0008; --t: #3b2f1a; --r: 16px; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; background: var(--card); border: 1px solid var(--line); padding: 6px; border-radius: 14px; }
+  .seg button { border: 0; background: none; color: var(--dim); font: 600 14px Inter, sans-serif; padding: 9px 14px; border-radius: 10px; cursor: pointer; transition: background .2s, color .2s; }
+  .seg button:hover { color: var(--ink); }
+  .seg button[aria-pressed=true] { background: linear-gradient(120deg, var(--blue), var(--violet)); color: #fff; }
+  .mat-note { color: var(--dim); min-height: 52px; margin: 16px 0 0; }
+
+  /* ---- numbers ---- */
+  .nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .num { padding: 26px 24px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); }
+  .num b { display: block; font: 700 40px/1.1 Sora, sans-serif; letter-spacing: -.03em; }
+  .num span { color: var(--dim); font-size: 14px; }
+
+  /* ---- promises ---- */
+  .promise { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .promise div { display: flex; gap: 14px; align-items: flex-start; padding: 18px 20px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+  .promise svg { width: 22px; height: 22px; flex: none; margin-top: 2px; stroke: #4fe3a3; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .promise b { display: block; margin-bottom: 2px; }
+  .promise span { color: var(--dim); font-size: 15px; }
+
+  /* ---- steps / faq ---- */
+  .steps { counter-reset: s; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .step { padding: 24px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); }
+  .step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; font: 700 16px Sora, sans-serif; color: #fff; background: linear-gradient(120deg, var(--blue), var(--violet)); margin-bottom: 14px; }
+  .step h3 { font-size: 17px; margin-bottom: 6px; }
+  .step p { margin: 0; color: var(--dim); font-size: 15px; }
+  details { border-bottom: 1px solid var(--line); padding: 18px 0; }
+  summary { cursor: pointer; font-weight: 600; font-size: 17px; list-style: none; display: flex; justify-content: space-between; gap: 20px; }
+  summary::after { content: "+"; color: var(--faint); font-size: 22px; line-height: 1; transition: transform .2s; }
+  details[open] summary::after { transform: rotate(45deg); }
+  details p { color: var(--dim); margin: 10px 0 0; max-width: 760px; }
+  kbd { font: 600 12px ui-monospace, Consolas, monospace; border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; background: var(--card); }
+
+  /* ---- final band, footer ---- */
+  .band { text-align: center; padding: 70px 24px; border-radius: 28px; background: radial-gradient(60% 120% at 50% 0%, #5b7cff40, transparent 70%), var(--card); border: 1px solid var(--line2); }
+  .band h2 { margin-top: 0; }
+  .band p { color: var(--dim); margin: 0 auto 26px; max-width: 520px; }
+  footer { padding: 48px 0 60px; color: var(--faint); font-size: 14px; }
+  footer .wrap { display: flex; gap: 20px; justify-content: space-between; flex-wrap: wrap; align-items: center; border-top: 1px solid var(--line); padding-top: 28px; }
+  footer b { color: var(--ink); font-weight: 600; }
+
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+
+  @media (max-width: 900px) {
+    .hero .wrap, .play { grid-template-columns: 1fr; }
+    .screen { transform: none; }
+    .grid, .steps { grid-template-columns: 1fr 1fr; }
+    .card.wide { grid-column: span 2; }
+    .nums { grid-template-columns: 1fr 1fr; }
+    nav .links { display: none; }
+  }
+  @media (max-width: 600px) {
+    .wrap { padding: 0 16px; }
+    .grid, .steps, .promise { grid-template-columns: 1fr; }
+    .card.wide { grid-column: auto; }
+    section { padding: 64px 0; }
+    nav .btn span { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .drag, .cursor { display: none; }
+    .reveal { opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.png" alt="">Tessera</a>
+    <div class="links"><a href="#features">Features</a><a href="#looks">Looks</a><a href="#promises">Promises</a><a href="#install">Install</a><a href="#faq">FAQ</a></div>
+    <a class="btn" href="https://github.com/hashanK/Tessera" aria-label="Tessera on GitHub"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg><span>GitHub</span></a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow"><b>Free</b> Open source for Windows 10 &amp; 11</span>
+      <h1>Your desktop,<br><span class="grad">beautifully in order.</span></h1>
+      <p class="lede">Tessera gathers your desktop icons into calm, glassy groups that sit right on your wallpaper. They're tabbed, themeable and light as air, and they never move a single file.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/hashanK/Tessera/releases/latest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>Download for Windows</a>
+        <a class="btn" href="#looks">See the looks</a>
+      </div>
+      <div class="meta"><span>Version 0.1.0</span><span>2.7 MB installer</span><span>No admin needed</span><span>MIT licence</span></div>
+    </div>
+
+    <!-- A living desktop: the wallpaper changes, the groups follow its colour, an icon is dragged between groups. -->
+    <div class="screen" id="screen" aria-label="An animated example desktop with Tessera groups" role="img">
+      <div class="wall" id="wall"></div>
+      <svg class="hills" id="hills" viewBox="0 0 400 200" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 120 C60 80 120 90 180 110 S300 70 400 100 V200 H0Z" fill="#00000030"/>
+        <path d="M0 150 C80 120 140 140 220 135 S340 110 400 130 V200 H0Z" fill="#00000045"/>
+      </svg>
+      <div class="chip-wall"><i></i><span id="wallname">Following your wallpaper</span></div>
+
+      <div class="g" style="left:3%;top:4%;width:29%">
+        <h4>Apps</h4>
+        <div class="icons" style="--cols:3" id="g-apps"></div>
+      </div>
+      <div class="g tabs" style="left:3%;top:46%;width:29%;--cols:3">
+        <h4><em class="on">Work</em><em>Play</em><em>Study</em></h4>
+        <div class="icons" style="--cols:3" id="g-tabs"></div>
+      </div>
+      <div class="g" style="left:62%;top:40%;width:22%">
+        <h4>Folders</h4>
+        <div class="icons" style="--cols:2" id="g-folders"></div>
+      </div>
+      <div class="g" style="left:62%;top:4%;width:33%">
+        <h4>System</h4>
+        <div class="icons" style="--cols:3" id="g-system"></div>
+      </div>
+
+      <svg class="drag" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="#ff4d8d"/><path d="M21 31V15l10-2v14" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><circle cx="18" cy="31" r="3.5" fill="#fff"/><circle cx="28" cy="28" r="3.5" fill="#fff"/></svg>
+      <svg class="cursor" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 2l7 19 3-8 8-3z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/></svg>
+      <div class="taskbar"><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <div class="head reveal"><span class="kicker">Features</span><h2>Everything a tidy desktop needs.<br>Nothing it doesn't.</h2><p class="sub">Tessera is a small native program. It draws your icons in groups, steps aside when you work, and puts everything back exactly as it was when you quit.</p></div>
+    <div class="grid">
+      <div class="card wide reveal" style="--hue:#5b7cff40"><div class="ico" style="--c:#7aa2ff"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></div><h3>Groups that sort themselves</h3><p>On first run your icons are gathered by kind: apps, folders, documents and system items. New files land in the right group automatically. Move, resize, roll up and rename groups however you like.</p></div>
+      <div class="card reveal" style="--hue:#9a7bff40"><div class="ico" style="--c:#b49cff"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/><path d="M3 7V5h6l2 2"/></svg></div><h3>Tabs</h3><p>Put Work, Play and Study in one group and switch with a click. Drop an icon on a tab to file it there.</p></div>
+      <div class="card reveal" style="--hue:#5ee2ff40"><div class="ico" style="--c:#5ee2ff"><svg viewBox="0 0 24 24"><path d="M12 3v14M7 12l5 5 5-5"/><path d="M5 21h14"/></svg></div><h3>Real drag and drop</h3><p>Drag between groups, out to Explorer, or in from anywhere. Drop links from your browser and onto folders or the Recycle Bin.</p></div>
+      <div class="card reveal" style="--hue:#4fe3a340"><div class="ico" style="--c:#4fe3a3"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 13h3M8 16h6"/></svg></div><h3>Folder portals</h3><p>Show any folder live on your desktop, like Downloads or a project, and browse into its subfolders in place.</p></div>
+      <div class="card reveal" style="--hue:#ff6fb140"><div class="ico" style="--c:#ff8cc4"><svg viewBox="0 0 24 24"><path d="M12 2l9 5-9 5-9-5z"/><path d="M3 12l9 5 9-5M3 17l9 5 9-5"/></svg></div><h3>Profiles</h3><p>Keep complete desktop arrangements for Work and Gaming, and switch with a hotkey.</p></div>
+      <div class="card wide reveal" style="--hue:#ffb44a40"><div class="ico" style="--c:#ffc46b"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5 1-1.5 2-1.5h2a4 4 0 0 0 4-4"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></svg></div><h3>Colours from your wallpaper</h3><p>Tessera finds your wallpaper's main colours. Give every group one of them, or switch on <b>Follow my wallpaper</b> and they recolour themselves whenever you change it.</p></div>
+      <div class="card reveal" style="--hue:#7aa2ff40"><div class="ico" style="--c:#7aa2ff"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 15h10"/></svg></div><h3>Keyboard first</h3><p>Arrows, typing to find an icon, <kbd>F2</kbd>, <kbd>Del</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>/<kbd>V</kbd> and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> work just like on the normal desktop.</p></div>
+      <div class="card reveal" style="--hue:#9a7bff40"><div class="ico" style="--c:#b49cff"><svg viewBox="0 0 24 24"><path d="M4 7h4M4 12h10M4 17h7"/><rect x="14" y="4" width="6" height="6" rx="1.5"/></svg></div><h3>Multi-select</h3><p><kbd>Ctrl</kbd>+click, <kbd>Shift</kbd>+click and <kbd>Ctrl</kbd>+<kbd>A</kbd>. Then drag, copy or delete them all at once.</p></div>
+      <div class="card reveal" style="--hue:#5ee2ff40"><div class="ico" style="--c:#5ee2ff"><svg viewBox="0 0 24 24"><path d="M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z"/></svg></div><h3>Themes</h3><p>Nine built-in looks, plus your own. Save, share and import them as files.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="looks">
+  <div class="wrap play">
+    <div class="stage reveal" id="stage">
+      <div class="demo acrylic" id="demo"><h4>Projects</h4><div class="icons" id="g-demo"></div></div>
+    </div>
+    <div class="reveal">
+      <span class="kicker">Make it yours</span>
+      <h2>Glass, grain and gradients.<br><span class="grad">Your call.</span></h2>
+      <p class="sub">Every group can have its own material, border, shadow, font, title style, icon effects and hover motion. You see each change live, on the desktop, as you make it.</p>
+      <div style="margin-top:26px" class="seg" role="group" aria-label="Material">
+        <button aria-pressed="true" data-mat="acrylic">Acrylic</button><button aria-pressed="false" data-mat="frosted">Frosted glass</button><button aria-pressed="false" data-mat="mica">Mica</button><button aria-pressed="false" data-mat="gradient">Gradient</button><button aria-pressed="false" data-mat="solid">Solid</button>
+      </div>
+      <p class="mat-note" id="matnote">Acrylic: your wallpaper, softly blurred under a tint, with a touch of grain.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="head reveal"><span class="kicker">Light as air</span><h2>Designed to cost you nothing.</h2><p class="sub">Tessera only draws when something changes. When your desktop is still, it does nothing at all.</p></div>
+    <div class="nums">
+      <div class="num reveal"><b class="grad">0 %</b><span>CPU while idle: no timers and no polling</span></div>
+      <div class="num reveal"><b class="grad">~20 MB</b><span>of memory for the organiser</span></div>
+      <div class="num reveal"><b class="grad">&lt; 1 MB</b><span>program size, native Rust</span></div>
+      <div class="num reveal"><b class="grad">0</b><span>files moved, ever, to organise them</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="promises">
+  <div class="wrap">
+    <div class="head reveal"><span class="kicker">Promises</span><h2>Your desktop stays yours.</h2></div>
+    <div class="promise">
+      <div class="reveal"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg><p style="margin:0"><b>Never moves your files</b><span>Organising only changes how icons are shown. Your files stay exactly where they are.</span></p></div>
+      <div class="reveal"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg><p style="margin:0"><b>Quit, and it's as it was</b><span>Tessera runs beside Explorer, not inside it. Exit and your normal desktop is back.</span></p></div>
+      <div class="reveal"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg><p style="margin:0"><b>No account, no telemetry</b><span>Nothing is sent anywhere. Tessera doesn't use the network at all.</span></p></div>
+      <div class="reveal"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg><p style="margin:0"><b>Free and open source</b><span>MIT licensed. Read the code, change it, share it.</span></p></div>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <div class="head reveal"><span class="kicker">Get started</span><h2>Up and running in a minute.</h2></div>
+    <div class="steps">
+      <div class="step reveal"><h3>Download</h3><p>Get <b>tessera-setup.exe</b> from the latest release on GitHub.</p></div>
+      <div class="step reveal"><h3>Install</h3><p>Run it. It installs for your account only, with no administrator prompt. Windows may say "Windows protected your PC" because the installer isn't signed yet: choose <b>More info → Run anyway</b>.</p></div>
+      <div class="step reveal"><h3>Enjoy</h3><p>Your icons are grouped by kind straight away. Right-click a group, or double-click the tray icon, to make it yours.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="head reveal"><span class="kicker">Questions</span><h2>Good to know</h2></div>
+    <div class="reveal">
+      <details><summary>Is it really free?</summary><p>Yes. Tessera is free and open source under the MIT License. There are no ads, no trials and no paid tier.</p></details>
+      <details><summary>Does it change or move my files?</summary><p>No. Arranging icons in groups never touches your files. Only actions you ask for, such as deleting, renaming or dropping files in, do what they would do on the normal desktop, through Windows' own file operations.</p></details>
+      <details><summary>What if I uninstall it?</summary><p>Uninstall from Settings → Apps. Your normal desktop icons come back as they were. You choose whether to keep or delete your saved groups.</p></details>
+      <details><summary>Which Windows versions?</summary><p>Windows 10 and 11. The settings window uses Microsoft Edge WebView2, which Windows 11 already includes.</p></details>
+      <details><summary>Will it slow my PC down?</summary><p>No. Tessera uses no CPU while your desktop is still and about 20 MB of memory. Effects such as blur and shadows are drawn once, not every frame, and there's a low-effects mode for older PCs.</p></details>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:20px">
+  <div class="wrap">
+    <div class="band reveal">
+      <img src="icon.png" alt="" width="84" height="84" style="border-radius:20px;margin-bottom:18px">
+      <h2>A calmer desktop is one click away.</h2>
+      <p>Free, open source, and made with care.</p>
+      <div class="cta" style="justify-content:center"><a class="btn primary" href="https://github.com/hashanK/Tessera/releases/latest">Download for Windows</a><a class="btn" href="https://github.com/hashanK/Tessera">View the source</a></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Made by <b>Hashan Kannangara</b>, Senior Software Engineer · Sri Lanka</span>
+    <span>© 2026 · MIT License · <a href="https://github.com/hashanK/Tessera">GitHub</a></span>
+  </div>
+</footer>
+
+<script>
+  // Small icons drawn in code, so the page needs no image files.
+  const ICONS = {
+    folder: '<path d="M4 11a3 3 0 0 1 3-3h11l4 4h19a3 3 0 0 1 3 3v22a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z" fill="#e9a923"/><path d="M4 17a3 3 0 0 1 3-3h34a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z" fill="#f6c344"/>',
+    doc: '<path d="M11 4h18l10 10v28a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="#f4f6fa"/><path d="M29 4v8a2 2 0 0 0 2 2h8z" fill="#c9d3e3"/><path d="M15 22h18M15 28h18M15 34h12" stroke="#3f73e0" stroke-width="2.5" stroke-linecap="round"/>',
+    app: '<defs><linearGradient id="ga" x2="1" y2="1"><stop offset="0" stop-color="#7b5cff"/><stop offset="1" stop-color="#3fa2ff"/></linearGradient></defs><rect x="4" y="4" width="40" height="40" rx="10" fill="url(#ga)"/><circle cx="24" cy="24" r="9" fill="none" stroke="#fff" stroke-width="3.5"/>',
+    play: '<rect x="4" y="4" width="40" height="40" rx="10" fill="#ff7a45"/><path d="M19 15l14 9-14 9z" fill="#fff"/>',
+    photo: '<rect x="4" y="8" width="40" height="32" rx="5" fill="#34c38f"/><path d="M4 34l11-12 9 9 6-6 14 13v2a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" fill="#1f8a62"/><circle cx="33" cy="17" r="4" fill="#fff4c2"/>',
+    music: '<circle cx="24" cy="24" r="20" fill="#ff4d8d"/><path d="M21 31V15l10-2v14" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><circle cx="18" cy="31" r="3.5" fill="#fff"/><circle cx="28" cy="28" r="3.5" fill="#fff"/>',
+    notes: '<rect x="4" y="4" width="40" height="40" rx="10" fill="#ffd23f"/><path d="M14 16h20M14 24h20M14 32h12" stroke="#7a5a00" stroke-width="3" stroke-linecap="round"/>',
+    code: '<rect x="4" y="4" width="40" height="40" rx="10" fill="#2b6cf0"/><path d="M19 17l-7 7 7 7M29 17l7 7-7 7" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>',
+    chat: '<rect x="4" y="4" width="40" height="40" rx="12" fill="#2fb7f0"/><path d="M13 24l20-9-6 20-4-7z" fill="#fff"/>',
+    pc: '<rect x="5" y="8" width="38" height="25" rx="3" fill="#38c6f0"/><rect x="5" y="8" width="38" height="25" rx="3" fill="url(#gp)"/><defs><linearGradient id="gp" x2="0" y2="1"><stop offset="0" stop-color="#7fe0ff"/><stop offset="1" stop-color="#1f7fd6"/></linearGradient></defs><path d="M18 38h12M24 33v5" stroke="#8a95a8" stroke-width="3" stroke-linecap="round"/>',
+    bin: '<path d="M12 14h24l-2 28H14z" fill="#dfe6ee"/><path d="M10 12h28" stroke="#b7c2cf" stroke-width="4" stroke-linecap="round"/><path d="M20 26l4-5 4 5M24 21v12" stroke="#2f9be8" stroke-width="2.5" fill="none" stroke-linecap="round"/>',
+    globe: '<circle cx="24" cy="24" r="18" fill="#2f9be8"/><path d="M8 24h32M24 6c6 6 6 30 0 36M24 6c-6 6-6 30 0 36" stroke="#bfe6ff" stroke-width="2" fill="none"/>',
+  };
+  const svg = (k, size = 48) => `<svg viewBox="0 0 48 48" aria-hidden="true">${ICONS[k]}</svg>`;
+  const fill = (id, list) => { document.getElementById(id).innerHTML = list.map(([k, name]) => `<span>${svg(k)}${name}</span>`).join(""); };
+  fill("g-apps", [["app", "Studio"], ["code", "Code"], ["chat", "Chat"], ["notes", "Notes"], ["music", "Music"], ["photo", "Photos"]]);
+  fill("g-tabs", [["doc", "Report"], ["doc", "Budget"], ["folder", "Clients"]]);
+  fill("g-folders", [["folder", "Projects"], ["folder", "Downloads"], ["folder", "Archive"], ["play", "Player"]]);
+  fill("g-system", [["pc", "This PC"], ["bin", "Recycle Bin"], ["globe", "Network"]]);
+  fill("g-demo", [["folder", "Projects"], ["doc", "Report"], ["app", "Studio"], ["play", "Player"], ["photo", "Photos"], ["music", "Music"], ["notes", "Notes"], ["code", "Code"]]);
+
+  // The wallpaper changes; the groups follow its most prominent colour, as "Follow my wallpaper" does.
+  const scenes = [
+    { name: "Aurora", wall: "radial-gradient(60% 50% at 25% 25%, #46d6c7, transparent 70%), radial-gradient(50% 50% at 80% 20%, #6f5bff, transparent 70%), linear-gradient(160deg, #0b2a4a, #10183a)", tint: "#14324a", accent: "#46d6c7" },
+    { name: "Sunset", wall: "radial-gradient(60% 50% at 70% 30%, #ffb44a, transparent 70%), radial-gradient(50% 60% at 20% 30%, #ff5d8f, transparent 70%), linear-gradient(170deg, #5a2a4a, #2a1430)", tint: "#4a1f36", accent: "#ffb44a" },
+    { name: "Forest", wall: "radial-gradient(60% 50% at 30% 20%, #a6e36a, transparent 70%), radial-gradient(50% 50% at 80% 30%, #2fbf8f, transparent 70%), linear-gradient(170deg, #173d2a, #0d2018)", tint: "#173a29", accent: "#a6e36a" },
+    { name: "Dusk", wall: "radial-gradient(60% 50% at 70% 25%, #9a7bff, transparent 70%), radial-gradient(50% 50% at 20% 30%, #3f73e0, transparent 70%), linear-gradient(170deg, #1d1f4a, #0d0f24)", tint: "#22245a", accent: "#9a7bff" },
+  ];
+  const screen = document.getElementById("screen"), wall = document.getElementById("wall"), wallname = document.getElementById("wallname");
+  let scene = 0;
+  function show(i) {
+    const s = scenes[i];
+    wall.style.background = s.wall;
+    screen.style.setProperty("--tint", s.tint);
+    screen.style.setProperty("--accent", s.accent);
+    wallname.textContent = `Following your wallpaper · ${s.name}`;
+  }
+  show(0);
+  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!calm) setInterval(() => { scene = (scene + 1) % scenes.length; show(scene); }, 4500);
+
+  // Tabs in the hero switch now and then.
+  const tabs = [...document.querySelectorAll(".g.tabs em")];
+  const tabIcons = [[["doc", "Report"], ["doc", "Budget"], ["folder", "Clients"]], [["play", "Player"], ["music", "Music"], ["photo", "Photos"]], [["notes", "Notes"], ["doc", "Essay"], ["folder", "Course"]]];
+  let tab = 0;
+  if (!calm) setInterval(() => { tab = (tab + 1) % 3; tabs.forEach((t, i) => t.classList.toggle("on", i === tab)); fill("g-tabs", tabIcons[tab]); }, 3000);
+
+  // Materials playground.
+  const notes = {
+    acrylic: "Acrylic: your wallpaper, softly blurred under a tint, with a touch of grain.",
+    frosted: "Frosted glass: bright and airy, like a pane of misted glass.",
+    mica: "Mica: just a hint of your wallpaper's colour, calm and quiet.",
+    gradient: "Gradient: two or three colours of your choice, linear or radial.",
+    solid: "Solid: crisp and opaque. Shown here as paper, with a dashed border and a serif font.",
+  };
+  const demo = document.getElementById("demo");
+  document.querySelectorAll("[data-mat]").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll("[data-mat]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    demo.className = "demo " + b.dataset.mat;
+    demo.style.fontFamily = b.dataset.mat === "solid" ? "Georgia, serif" : "";
+    document.getElementById("matnote").textContent = notes[b.dataset.mat];
+  }));
+
+  // Sections fade in as they scroll into view.
+  const io = new IntersectionObserver((entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .12 });
+  document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+</script>
+</body>
+</html>

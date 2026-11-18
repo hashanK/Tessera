@@ -8,3 +8,6 @@ dist/
 # Portable-mode data and logs from test runs
 data/
 *.log
+
+# Local tool settings (the site preview server)
+.claude/

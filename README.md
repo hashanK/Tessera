@@ -4,6 +4,8 @@ Desktop icon groups for Windows 10/11. A small native Rust program that sorts yo
 
 Made by **Hashan Kannangara**, Senior Software Engineer, Sri Lanka. Free and open source under the [MIT License](LICENSE).
 
+Website: https://hashank.github.io/Tessera/
+
 ## Install
 
 Run `tessera-setup-<version>.exe`: download it from the repository's Releases page, or build it with the command below (it lands in `dist\`). It installs for your account only (no administrator prompt) into `%LOCALAPPDATA%\Programs\Tessera`, adds Start menu entries for Tessera and Tessera Settings, and lists Tessera in Settings → Apps so it can be uninstalled from there. A tick box decides whether it starts when you sign in. Uninstalling keeps your groups unless you tick "Also delete my groups, profiles and settings".
@@ -171,6 +173,7 @@ Not built yet: rubber-band (drag a box) selection, a selection spanning several 
 | `crates/setup` | Installer and uninstaller (`tessera-setup.exe`), carrying the release builds inside it. |
 | `build-support/resources.rs` | Embeds the app icon (`assets/tessera.ico`) and version information at build time. |
 | `assets` | The app icon: master PNG, multi-size .ico, small PNG for the settings window. |
+| `site` | The website (one HTML page), published to GitHub Pages by `.github/workflows/pages.yml`. |
 | `scripts/package.ps1` | Builds everything and writes `dist\tessera-setup-<version>.exe`. |
 | `spikes/probe` | Feasibility probe used for the Phase 1 measurements. |
 | `docs/research.md` | Competitive research and feasibility results. |
