@@ -1,0 +1,51 @@
+# Builds the installer on Windows and publishes it as a GitHub release when a version tag
+# (e.g. v0.1.0) is pushed. The website's download buttons link to
+# releases/latest/download/tessera-setup.exe, so the newest release is always what people get.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and release (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - name: Run the tests
+        run: cargo test --workspace --release
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          ./scripts/package.ps1
+          Copy-Item (Get-ChildItem dist\tessera-setup-*.exe | Select-Object -First 1).FullName dist\tessera-setup.exe
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = $env:TAG.TrimStart("v")
+          $notes = @"
+          Tessera $version for Windows 10 and 11.
+
+          **Download:** tessera-setup.exe below. Run it to install for your account; no administrator rights are needed.
+
+          The installer isn't code-signed yet, so Windows may show "Windows protected your PC". Choose **More info → Run anyway**.
+
+          Free and open source under the MIT License. Made by Hashan Kannangara.
+          "@
+          gh release create $env:TAG dist\tessera-setup.exe --title "Tessera $version" --notes $notes
