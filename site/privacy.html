@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · Tessera</title>
+<meta name="description" content="Tessera's privacy policy: it collects no personal data, sends nothing anywhere and has no network access.">
+<meta name="theme-color" content="#0a0e1c">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1c; --card: #12182e; --line: #ffffff14; --line2: #ffffff24;
+    --ink: #eef1fb; --dim: #a4abc4; --faint: #6d7592; --cyan: #5ee2ff; --blue: #5b7cff; --violet: #9a7bff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f5f6fb; --card: #ffffff; --line: #0b10200f; --line2: #0b10201f; --ink: #0e1222; --dim: #4b5372; --faint: #7a829d; --cyan: #0b84b8; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.7 Inter, "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: var(--cyan); }
+  nav { border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; align-items: center; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 600 18px Sora, sans-serif; text-decoration: none; color: var(--ink); }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  nav .back { margin-left: auto; font-size: 15px; color: var(--dim); text-decoration: none; padding: 10px 4px; }
+  nav .back:hover { color: var(--ink); }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 0 24px; }
+  header { padding: 56px 0 18px; }
+  .kicker { font: 600 13px Inter, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); }
+  h1 { font: 700 clamp(32px, 5vw, 44px)/1.12 Sora, sans-serif; letter-spacing: -.02em; margin: 10px 0 12px; }
+  .updated { color: var(--faint); font-size: 14px; }
+  .summary { margin: 28px 0 8px; padding: 22px 24px; border-radius: 16px; background: linear-gradient(135deg, #5b7cff1f, #9a7bff14); border: 1px solid var(--line2); }
+  .summary b { display: block; font: 600 18px Sora, sans-serif; margin-bottom: 6px; }
+  .summary p { margin: 0; color: var(--dim); }
+  h2 { font: 600 22px/1.3 Sora, sans-serif; letter-spacing: -.01em; margin: 40px 0 10px; }
+  p, li { color: var(--dim); }
+  strong { color: var(--ink); font-weight: 600; }
+  ul { padding-left: 20px; }
+  li { margin: 6px 0; }
+  code { font: 14px ui-monospace, Consolas, monospace; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; color: var(--ink); word-break: break-all; }
+  footer { margin-top: 64px; padding: 28px 0 56px; border-top: 1px solid var(--line); color: var(--faint); font-size: 14px; }
+  @media (max-width: 600px) { .wrap { padding: 0 16px; } header { padding-top: 36px; } }
+</style>
+</head>
+<body>
+<nav><div class="wrap"><a class="brand" href="./"><img src="icon.png" alt="">Tessera</a><a class="back" href="./">← Back to Tessera</a></div></nav>
+
+<main class="wrap">
+  <header>
+    <span class="kicker">Privacy policy</span>
+    <h1>Your desktop is your business.</h1>
+    <div class="updated">Effective 19 November 2026 · Applies to Tessera 0.1.0 and later</div>
+  </header>
+
+  <div class="summary">
+    <b>The short version</b>
+    <p>Tessera collects no personal data, sends nothing anywhere and doesn't use the network. Everything it knows about your desktop stays on your PC, in a folder you can open and delete.</p>
+  </div>
+
+  <h2>Who we are</h2>
+  <p>Tessera is a free, open-source desktop organiser for Windows, made by <strong>Hashan Kannangara</strong>, Senior Software Engineer, Sri Lanka. Its source code is public at <a href="https://github.com/hashanK/Tessera">github.com/hashanK/Tessera</a>, so anyone can check what it does.</p>
+
+  <h2>What Tessera does not do</h2>
+  <ul>
+    <li>It doesn't collect, store or share personal information.</li>
+    <li>It has no accounts, no sign-in, no analytics, no telemetry, no crash reporting and no ads.</li>
+    <li>It makes no network connections of its own. It doesn't check for updates in the background, and nothing is uploaded.</li>
+    <li>It doesn't move, copy or change your files in order to organise them.</li>
+  </ul>
+
+  <h2>What stays on your PC</h2>
+  <p>To remember your arrangement, Tessera saves a few files in <code>%APPDATA%\Tessera</code> (or next to the program in portable mode):</p>
+  <ul>
+    <li><strong>layout.json</strong> and a backup copy: your groups, their positions and looks, profiles and themes. It includes the names and locations of the desktop items you've grouped.</li>
+    <li><strong>tessera.log</strong>: a short technical log (for example "wallpaper captured") to help diagnose problems. It contains no personal data beyond file paths that may appear in error messages.</li>
+    <li><strong>webview</strong>: the settings window's local browser cache, created by Microsoft Edge WebView2.</li>
+  </ul>
+  <p>These files never leave your computer. Delete them whenever you like, or tick "Also delete my groups, profiles and settings" when you uninstall.</p>
+
+  <h2>Things Tessera reads while it runs</h2>
+  <ul>
+    <li><strong>Your desktop items</strong> (names, icons, locations), so it can show them in groups.</li>
+    <li><strong>Your wallpaper</strong>, kept as a small picture in memory only. It's used for the blur effects and to find its colours. It is never saved to disk or sent anywhere.</li>
+    <li><strong>The clipboard</strong>, but only when you press <code>Ctrl+C</code>, <code>Ctrl+X</code> or <code>Ctrl+V</code> on the desktop. Then it does exactly what Windows would do.</li>
+    <li><strong>Keyboard and mouse:</strong> while the desktop is the active window, or while an icon is selected, Tessera listens for the desktop's own shortcuts (arrows, Delete, F2…) and for clicks outside its groups. It doesn't record or store keys, and it ignores everything typed in other programs.</li>
+  </ul>
+
+  <h2>Links you choose to open</h2>
+  <p>The "View on GitHub" button in Tessera's settings opens the project page in your web browser. From then on, GitHub's privacy statement applies to that visit.</p>
+
+  <h2>Software Tessera relies on</h2>
+  <p>The settings window uses <strong>Microsoft Edge WebView2</strong>, a part of Windows. Windows and WebView2 are governed by Microsoft's own privacy statement. If you install Tessera from the Microsoft Store, the Store's handling of your purchase and download information is covered by Microsoft as well.</p>
+
+  <h2>This website</h2>
+  <p>This website is hosted on <strong>GitHub Pages</strong> and loads its fonts from <strong>Google Fonts</strong>. Like any web host, they may log technical data such as your IP address. See GitHub's and Google's privacy statements. The website itself sets no cookies and runs no analytics.</p>
+
+  <h2>Children</h2>
+  <p>Tessera collects no data from anyone, including children.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If Tessera ever changes how it handles information, this page will be updated first, with a new effective date. Its full history is in the project's public repository.</p>
+
+  <h2>Contact</h2>
+  <p>Questions? Open an issue at <a href="https://github.com/hashanK/Tessera/issues">github.com/hashanK/Tessera/issues</a>.</p>
+</main>
+
+<footer><div class="wrap">© 2026 Hashan Kannangara · Tessera is free and open source under the MIT License · <a href="./">Home</a></div></footer>
+</body>
+</html>

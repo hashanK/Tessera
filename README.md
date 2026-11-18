@@ -6,6 +6,10 @@ Made by **Hashan Kannangara**, Senior Software Engineer, Sri Lanka. Free and ope
 
 Website: https://hashank.github.io/Tessera/
 
+> ### ⭐ Add your tile to the mosaic
+> A *tessera* is one small tile in a mosaic, and every GitHub star is another tile in this one.
+> If Tessera made your desktop calmer, **[give it a star](https://github.com/hashanK/Tessera)**: it takes one click, helps other people find it, and tells me it's worth building the next feature.
+
 ## Install
 
 Run `tessera-setup.exe`: download it from the [website](https://hashank.github.io/Tessera/) or the [latest release](https://github.com/hashanK/Tessera/releases/latest), or build it with the command below (it lands in `dist\`). Pushing a version tag such as `v0.1.0` builds and publishes a release automatically (`.github/workflows/release.yml`). It installs for your account only (no administrator prompt) into `%LOCALAPPDATA%\Programs\Tessera`, adds Start menu entries for Tessera and Tessera Settings, and lists Tessera in Settings → Apps so it can be uninstalled from there. A tick box decides whether it starts when you sign in. Uninstalling keeps your groups unless you tick "Also delete my groups, profiles and settings".
@@ -173,15 +177,23 @@ Not built yet: rubber-band (drag a box) selection, a selection spanning several 
 | `crates/setup` | Installer and uninstaller (`tessera-setup.exe`), carrying the release builds inside it. |
 | `build-support/resources.rs` | Embeds the app icon (`assets/tessera.ico`) and version information at build time. |
 | `assets` | The app icon: master PNG, multi-size .ico, small PNG for the settings window. |
-| `site` | The website (one HTML page), published to GitHub Pages by `.github/workflows/pages.yml`. |
+| `site` | The website (home page and privacy policy), published to GitHub Pages by `.github/workflows/pages.yml`. |
 | `scripts/package.ps1` | Builds everything and writes `dist\tessera-setup-<version>.exe`. |
 | `spikes/probe` | Feasibility probe used for the Phase 1 measurements. |
 | `docs/research.md` | Competitive research and feasibility results. |
 | `docs/architecture.md` | Architecture and decision log. |
 | `docs/design.md` | MVP definition, journeys, identity and tokens. |
+| `docs/store-listing.md` | Text for the Microsoft Store listing. |
 
 ## Author and licence
 
 Tessera is made by **Hashan Kannangara**, Senior Software Engineer, Sri Lanka. Project page: https://github.com/hashanK/Tessera
 
-It is free and open source under the [MIT License](LICENSE): anyone may use, copy, change and share it, including commercially, as long as the copyright notice and licence travel with it.
+It is free and open source under the [MIT License](LICENSE): anyone may use, copy, change and share it, including commercially, as long as the copyright notice and licence travel with it. See also the [privacy policy](https://hashank.github.io/Tessera/privacy.html).
+
+---
+
+<p align="center">
+  <b>Enjoying a tidier desktop?</b><br>
+  Every ⭐ is a tile in the mosaic. <a href="https://github.com/hashanK/Tessera">Star Tessera on GitHub</a>, share it with a friend whose desktop needs it, or <a href="https://github.com/hashanK/Tessera/issues">tell me what to build next</a>.
+</p>
