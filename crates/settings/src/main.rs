@@ -110,6 +110,27 @@ fn dark_mode() -> bool {
     out.map(|o| String::from_utf8_lossy(&o.stdout).contains("0x0")).unwrap_or(false)
 }
 
+/// Wake the window when the wallpaper changes. Windows records it under HKCU\Control Panel\Desktop
+/// (the Settings app and the slideshow included); a thread sleeps until that key changes, waits
+/// for Explorer to fade the new wallpaper in (and for the organiser to recolour the groups), then
+/// tells the page. No polling.
+fn watch_wallpaper(proxy: tao::event_loop::EventLoopProxy<String>) {
+    use windows::Win32::System::Registry::*;
+    std::thread::spawn(move || unsafe {
+        let mut key = HKEY::default();
+        if RegOpenKeyExW(HKEY_CURRENT_USER, windows::core::w!("Control Panel\\Desktop"), None, KEY_NOTIFY, &mut key).is_err() {
+            return;
+        }
+        while RegNotifyChangeKeyValue(key, false, REG_NOTIFY_CHANGE_LAST_SET, None, false).is_ok() {
+            std::thread::sleep(std::time::Duration::from_millis(2000));
+            if proxy.send_event(r#"{"cmd":"wallpaper_changed"}"#.to_string()).is_err() {
+                break; // the window has closed
+            }
+        }
+        let _ = RegCloseKey(key);
+    });
+}
+
 /// Installed fonts, listed once per run (enumerating them takes a moment).
 fn fonts() -> &'static [String] {
     static FONTS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
@@ -260,6 +281,9 @@ fn main() {
         .build(&event_loop)
         .expect("window");
     // Should the page never say it is ready (a script error), show the window anyway.
+    // A new wallpaper while the window is open: read it again, so the Themes section (its
+    // colours, the previews) and the groups' new colours show without reopening.
+    watch_wallpaper(event_loop.create_proxy());
     let late = event_loop.create_proxy();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(2500));
@@ -289,6 +313,12 @@ fn main() {
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                 window.set_visible(false);
                 *control_flow = ControlFlow::Exit;
+            }
+            Event::UserEvent(body) if body.contains(r#""cmd":"wallpaper_changed""#) => {
+                // One update with the new wallpaper and the fresh state (the organiser has just
+                // recoloured the groups if they follow the wallpaper), so the page changes once.
+                let url = assets::wallpaper_data_url();
+                run(&format!("window.wallpaperChanged({}, {})", json!(url), state(None)));
             }
             Event::UserEvent(body) if body.contains(r#""cmd":"ready""#) => {
                 if !window.is_visible() {

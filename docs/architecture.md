@@ -130,6 +130,9 @@ Each window keeps a set of selected positions, an anchor (where a Shift range st
 Dropping several of our own icons on a group regroups them in their on-screen order.
 *Not built:* rubber-band selection; a selection spanning groups.
 
+### ADR-19 — Colours from the wallpaper
+The palette is k-means (8 centres from a deterministic start, 12 rounds) over a reduced copy of the wallpaper. Look-alike clusters are merged, and up to 6 are ranked by share. The settings window computes it in JavaScript from its preview copy. The organiser computes it in Rust (`look::palette`) from the wallpaper capture it already keeps for blur materials, using the same steps. *Follow my wallpaper* runs after every wallpaper re-read (start-up, and about 1.5 s after a wallpaper or display change). It sends one `recolor_all`, which changes only the background colour, the accent and the gradient stops of each group, and does nothing when the groups already have that colour. No timers, so the idle cost is still zero. A new wallpaper is noticed two ways: the `SPI_SETDESKWALLPAPER` broadcast, and a thread waiting in `RegNotifyChangeKeyValue` on `HKCU\Control Panel\Desktop`. The registry catches Windows 11's Settings app and the slideshow, which don't reliably broadcast. The settings window watches the same key, so its wallpaper preview and palette follow while it is open.
+
 ## Recovery behaviour
 
 | Event | Behaviour |

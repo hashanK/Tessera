@@ -198,6 +198,17 @@ impl Style {
         self.spacing = self.spacing.clamp(8, 64);
     }
 
+    /// Take a background colour (and optionally an accent), keeping everything else. A gradient
+    /// runs from the colour to a deeper shade of it.
+    pub fn recolor(&mut self, color: Rgb, accent: Option<Rgb>) {
+        self.color = Some(color);
+        if let Some(a) = accent {
+            self.accent = Some(a);
+        }
+        let deeper = Rgb(color.0.map(|v| (v as f32 * 0.55) as u8));
+        self.gradient.stops = vec![color, deeper];
+    }
+
     /// The same look with this style's icon size kept: themes change how a group looks,
     /// not how big its icons are.
     pub fn themed(&self, theme: &Style) -> Style {
@@ -305,6 +316,12 @@ pub struct Config {
     /// Skip wallpaper blur, grain and shadows, for slow machines or remote sessions.
     #[serde(default)]
     pub low_effects: bool,
+    /// Recolour every group from the wallpaper's most prominent colour whenever the wallpaper changes.
+    #[serde(default)]
+    pub wallpaper_auto: bool,
+    /// With `wallpaper_auto`, also take a matching accent.
+    #[serde(default)]
+    pub wallpaper_accent: bool,
 }
 
 impl Default for Config {
@@ -322,6 +339,8 @@ impl Default for Config {
             profiles: Vec::new(),
             custom_themes: Vec::new(),
             low_effects: false,
+            wallpaper_auto: false,
+            wallpaper_accent: false,
         }
     }
 }

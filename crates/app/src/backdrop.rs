@@ -123,6 +123,18 @@ impl Backdrop {
         self.px.chunks_exact(4).all(|p| p[0] == 0 && p[1] == 0 && p[2] == 0)
     }
 
+    /// Every fifth pixel in each direction, as RGB: enough to find the main colours.
+    pub fn sample(&self) -> Vec<[u8; 3]> {
+        let mut out = Vec::with_capacity(((self.w / 5 + 1) * (self.h / 5 + 1)) as usize);
+        for y in (0..self.h).step_by(5) {
+            for x in (0..self.w).step_by(5) {
+                let i = ((y * self.w + x) * 4) as usize;
+                out.push([self.px[i + 2], self.px[i + 1], self.px[i]]);
+            }
+        }
+        out
+    }
+
     /// Bytes held, for the memory budget.
     pub fn bytes(&self) -> usize {
         self.px.len()

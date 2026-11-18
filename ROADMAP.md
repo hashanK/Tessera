@@ -45,6 +45,8 @@ See the status table in `README.md`, which is kept in step with the code.
 - ⬜ Double-click empty desktop to hide (opt-in mouse hook)
 - ✅ Appearance system: materials (tinted, acrylic, frosted, Mica-like, gradient, solid), borders, shadows, title bar, typography, icon effects, per-group looks, built-in and custom themes, import/export, low-effects mode
 - ✅ Hover and selection motion (None, Fade, Grow, Float, Pop; None, Fade, Pulse, Pop), following the Windows animation setting
+- ✅ Wallpaper colours: palette from the wallpaper, apply one to every group or new groups, quick picks in the editor
+- ✅ Follow the wallpaper: groups take its most prominent colour whenever it changes
 - ⬜ Appearance extras: a wallpaper slideshow being noticed straight away, per-tab looks
 - ⬜ Keyboard navigation and accessibility (UI Automation providers)
 - ✅ Installer: per-user, Start menu, Settings → Apps uninstall, start with Windows, silent mode

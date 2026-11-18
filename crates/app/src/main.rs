@@ -22,6 +22,7 @@ use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Registry::{RegCloseKey, RegNotifyChangeKeyValue, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, KEY_NOTIFY, REG_NOTIFY_CHANGE_LAST_SET};
 use windows::Win32::System::Ole::{OleInitialize, RevokeDragDrop};
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
@@ -44,6 +45,8 @@ const WM_OPEN_SETTINGS: u32 = WM_APP + 7;
 const WM_CLICK_OUTSIDE: u32 = WM_APP + 8;
 /// Delete or Enter pressed on the desktop while an item is selected (wParam: key, lParam: Shift).
 const WM_ITEM_KEY: u32 = WM_APP + 9;
+/// The wallpaper settings in the registry changed (see `watch_wallpaper_setting`).
+const WM_WALLPAPER_SETTING: u32 = WM_APP + 10;
 /// Hotkey ids HOTKEY_PROFILE+1 ..= +9 switch to the first nine profiles (Ctrl+Alt+Shift+digit).
 const HOTKEY_PROFILE: i32 = 10;
 
@@ -325,7 +328,8 @@ impl App {
             }
             return;
         }
-        if !self.cfg.hosts().iter().any(|id| self.uses_backdrop(*id)) {
+        // Needed for wallpaper materials, and for following the wallpaper's colours.
+        if !self.cfg.wallpaper_auto && !self.cfg.hosts().iter().any(|id| self.uses_backdrop(*id)) {
             return;
         }
         self.renderer.backdrop = backdrop::Backdrop::capture();
@@ -398,6 +402,29 @@ impl App {
                 self.paint(id);
             }
         }
+        self.apply_wallpaper_colors();
+    }
+
+    /// Wallpaper colours in auto mode: every group takes the wallpaper's most prominent colour
+    /// (and a matching accent if chosen). Runs when auto mode is switched on, and each time the
+    /// wallpaper is read again: at start-up and after the wallpaper changes. Does nothing when the
+    /// groups already have that colour.
+    fn apply_wallpaper_colors(&mut self) {
+        if !self.cfg.wallpaper_auto {
+            return;
+        }
+        self.ensure_backdrop();
+        let Some(backdrop) = &self.renderer.backdrop else { return };
+        let palette = tessera_core::palette(&backdrop.sample());
+        let Some(&(color, _)) = palette.first() else { return };
+        let accent = self.cfg.wallpaper_accent.then(|| tessera_core::accent_for(&palette, color));
+        let hosts = self.cfg.hosts();
+        let done = hosts.iter().filter_map(|h| self.cfg.fence(*h)).all(|f| f.style.color == Some(color) && (accent.is_none() || f.style.accent == accent));
+        if done {
+            return;
+        }
+        log(&format!("wallpaper colours: groups now use {color:?}{}", accent.map(|a| format!(", accent {a:?}")).unwrap_or_default()));
+        self.command(Command::RecolorAll { color, accent });
     }
 
     /// On-screen rectangle: the stored one, or just the title bar when rolled up.
@@ -2012,6 +2039,7 @@ impl App {
             Effect::RepaintAll => self.paint_all(),
             Effect::SaveOnly => {}
             Effect::Windows => self.sync_windows(),
+            Effect::WallpaperColors => self.apply_wallpaper_colors(),
             Effect::Reload => self.reload_layout(),
             Effect::PickPortal => unsafe {
                 // The folder dialog must not run inside the sender's SendMessage.
@@ -2259,6 +2287,25 @@ unsafe extern "system" fn fence_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARA
 static OUTSIDE_HOOK: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
 static OUTSIDE_NOTIFY: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
 
+/// Windows records the wallpaper under HKCU\Control Panel\Desktop (its path, and the cached copy
+/// Explorer writes when it changes). Every way of changing it, the Settings app and the slideshow
+/// included, writes there, while the WM_SETTINGCHANGE broadcast isn't always sent. A thread sleeps
+/// in RegNotifyChangeKeyValue and posts a message for each change: no polling.
+fn watch_wallpaper_setting(main: HWND) {
+    let main = main.0 as isize;
+    std::thread::spawn(move || unsafe {
+        let mut key = HKEY::default();
+        if RegOpenKeyExW(HKEY_CURRENT_USER, w!("Control Panel\\Desktop"), None, KEY_NOTIFY, &mut key).is_err() {
+            log("can't watch the wallpaper setting; only the WM_SETTINGCHANGE broadcast will be noticed");
+            return;
+        }
+        while RegNotifyChangeKeyValue(key, false, REG_NOTIFY_CHANGE_LAST_SET, None, false).is_ok() {
+            let _ = PostMessageW(Some(HWND(main as *mut _)), WM_WALLPAPER_SETTING, WPARAM(0), LPARAM(0));
+        }
+        let _ = RegCloseKey(key);
+    });
+}
+
 /// The keyboard hook: installed while the desktop is the active window, so the keys you would
 /// press on the native desktop (arrows, Delete, F2, Ctrl+C...) reach the icons in the groups.
 /// Keys typed into any other program never pass through it, because it doesn't exist then.
@@ -2469,7 +2516,13 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
             app.display_changed();
             SetTimer(Some(hwnd), TIMER_BACKDROP, 1500, None);
         }
+        // Two signals for a new wallpaper: the classic broadcast, and the registry (see
+        // watch_wallpaper_setting), which also catches the Settings app and the slideshow. Either
+        // re-reads it a moment later, once Explorer has faded the new one in.
         WM_SETTINGCHANGE if wp.0 as u32 == SPI_SETDESKWALLPAPER.0 => {
+            SetTimer(Some(hwnd), TIMER_BACKDROP, 1500, None);
+        }
+        WM_WALLPAPER_SETTING => {
             SetTimer(Some(hwnd), TIMER_BACKDROP, 1500, None);
         }
         WM_SETTINGCHANGE if wp.0 as u32 == SPI_SETWORKAREA.0 => app.display_changed(),
@@ -2610,6 +2663,7 @@ unsafe fn run() -> Result<()> {
     // If the desktop is already in front (Show Desktop), put the groups above it now: no
     // foreground change will arrive to do it.
     app.follow_desktop(true);
+    watch_wallpaper_setting(app.main);
     app.dirty();
     for n in 1..=9 {
         let _ = RegisterHotKey(Some(main), HOTKEY_PROFILE + n, MOD_CONTROL | MOD_ALT | MOD_SHIFT | MOD_NOREPEAT, '0' as u32 + n as u32);

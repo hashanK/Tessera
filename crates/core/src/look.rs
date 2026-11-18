@@ -403,6 +403,85 @@ pub struct Preset {
     pub style: crate::model::Style,
 }
 
+/// A picture's main colours, largest share first: k-means (8 clusters, a deterministic start)
+/// over the given pixels, with look-alike clusters merged. Returns at most 6 (colour, share).
+/// The settings window runs the same steps in JavaScript for its palette.
+pub fn palette(pixels: &[[u8; 3]]) -> Vec<(Rgb, f32)> {
+    if pixels.is_empty() {
+        return Vec::new();
+    }
+    let px: Vec<[f32; 3]> = pixels.iter().map(|p| p.map(|v| v as f32)).collect();
+    // Perceptual-ish distance: green matters most, blue least.
+    let dist = |a: &[f32; 3], b: &[f32; 3]| 2.0 * (a[0] - b[0]).powi(2) + 4.0 * (a[1] - b[1]).powi(2) + 3.0 * (a[2] - b[2]).powi(2);
+    let n = px.len() as f32;
+    let mean = [0, 1, 2].map(|c| px.iter().map(|p| p[c]).sum::<f32>() / n);
+    let mut centres = vec![mean];
+    // Then repeatedly the pixel farthest from every centre so far.
+    while centres.len() < 8 {
+        let far = px.iter().step_by(7).max_by(|a, b| {
+            let da = centres.iter().map(|c| dist(a, c)).fold(f32::MAX, f32::min);
+            let db = centres.iter().map(|c| dist(b, c)).fold(f32::MAX, f32::min);
+            da.total_cmp(&db)
+        });
+        centres.push(*far.unwrap_or(&mean));
+    }
+    let mut counts = vec![0usize; centres.len()];
+    for _ in 0..12 {
+        let mut sums = vec![[0f32; 3]; centres.len()];
+        counts.iter_mut().for_each(|c| *c = 0);
+        for p in &px {
+            let k = (0..centres.len()).min_by(|&i, &j| dist(p, &centres[i]).total_cmp(&dist(p, &centres[j]))).unwrap_or(0);
+            for c in 0..3 {
+                sums[k][c] += p[c];
+            }
+            counts[k] += 1;
+        }
+        for (j, c) in centres.iter_mut().enumerate() {
+            if counts[j] > 0 {
+                *c = sums[j].map(|s| s / counts[j] as f32);
+            }
+        }
+    }
+    let mut clusters: Vec<([f32; 3], usize)> = centres.into_iter().zip(counts).filter(|(_, n)| *n > 0).collect();
+    let mut i = 0;
+    while i < clusters.len() {
+        let mut j = clusters.len() - 1;
+        while j > i {
+            if dist(&clusters[i].0, &clusters[j].0) < 9.0 * 24.0 * 24.0 {
+                let (b, nb) = clusters.remove(j);
+                let (a, na) = clusters[i];
+                let total = (na + nb) as f32;
+                clusters[i] = ([0, 1, 2].map(|c| (a[c] * na as f32 + b[c] * nb as f32) / total), na + nb);
+            }
+            j -= 1;
+        }
+        i += 1;
+    }
+    clusters.sort_by(|a, b| b.1.cmp(&a.1));
+    clusters.into_iter().take(6).map(|(c, k)| (Rgb(c.map(|v| v.round() as u8)), k as f32 / n)).collect()
+}
+
+/// An accent to go with background `bg`: the most colourful other palette colour, lightened until
+/// it stands out on a group.
+pub fn accent_for(palette: &[(Rgb, f32)], bg: Rgb) -> Rgb {
+    let lum = |c: [f32; 3]| (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255.0;
+    let sat = |c: [f32; 3]| {
+        let (mx, mn) = (c[0].max(c[1]).max(c[2]), c[0].min(c[1]).min(c[2]));
+        if mx == 0.0 { 0.0 } else { (mx - mn) / mx }
+    };
+    let f = |c: Rgb| c.0.map(|v| v as f32);
+    let b = f(bg);
+    let others: Vec<[f32; 3]> = palette.iter().map(|(c, _)| f(*c)).filter(|c| (lum(*c) - lum(b)).abs() > 0.04 || sat(*c) > sat(b) + 0.15).collect();
+    let mut pick = others.into_iter().fold(b, |best, c| if sat(c) * (0.4 + lum(c)) > sat(best) * (0.4 + lum(best)) { c } else { best });
+    for _ in 0..8 {
+        if lum(pick) >= 0.45 {
+            break;
+        }
+        pick = pick.map(|v| v + (255.0 - v) * 0.25);
+    }
+    Rgb(pick.map(|v| v.round() as u8))
+}
+
 /// The built-in themes. Each is a starting point; users adjust and save their own.
 pub fn builtin_themes() -> Vec<Preset> {
     use crate::model::{Style, Tint};
@@ -509,4 +588,32 @@ pub fn builtin_themes() -> Vec<Preset> {
             s.title.size = 11.5;
         }),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn palette_ranks_colours_by_share() {
+        // 70 % dark blue, 20 % orange, 10 % near-white.
+        let mut px = vec![[20, 30, 60]; 700];
+        px.extend(vec![[230, 120, 40]; 200]);
+        px.extend(vec![[240, 240, 235]; 100]);
+        let p = palette(&px);
+        assert_eq!(p.len(), 3, "look-alike clusters merge: {p:?}");
+        assert_eq!(p[0].0, Rgb([20, 30, 60]));
+        assert!((p[0].1 - 0.7).abs() < 0.01 && (p[1].1 - 0.2).abs() < 0.01);
+        // The accent for the blue background is the colourful orange, not the white.
+        assert_eq!(accent_for(&p, p[0].0), Rgb([230, 120, 40]));
+        assert!(palette(&[]).is_empty());
+    }
+
+    #[test]
+    fn a_dark_accent_is_lightened() {
+        let p = vec![(Rgb([10, 10, 12]), 0.8), (Rgb([60, 10, 10]), 0.2)];
+        let a = accent_for(&p, Rgb([10, 10, 12]));
+        let lum = (0.2126 * a.0[0] as f32 + 0.7152 * a.0[1] as f32 + 0.0722 * a.0[2] as f32) / 255.0;
+        assert!(lum >= 0.45, "{a:?}");
+    }
 }

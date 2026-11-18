@@ -40,6 +40,7 @@ This builds two programs that must sit in the same folder: `tessera.exe` (the or
 | Double-click a title bar | Roll up / expand |
 | Right-click a title bar or empty area | Rename, sort, icon size, colour, opacity, fit, new group, settings, delete |
 | Settings → Groups → a group → Customise…, or Settings → Themes | Give a group its own look: material (tinted, acrylic, frosted glass, Mica, gradient, solid), border, shadow, title bar, font and label style, icon effects, hover and selection motion, and spacing, with a live preview. Save looks as themes, apply a theme to one group or all of them, import and export themes as JSON |
+| Settings → Themes → From your wallpaper | See your wallpaper's six main colours (largest first) and give every group, or new groups, one of them as its background, with a matching accent if you like. The appearance editor offers the same colours as quick picks. **Follow my wallpaper** recolours every group automatically whenever you change the wallpaper |
 | Open Tessera again (Start menu) while it is running, or Tessera Settings, or double-click the tray icon | Open the settings window |
 | Drag an icon | Move it to another group or reorder it — or drag it out to Explorer, the Recycle Bin or any program that accepts files |
 | Drop files from Explorer or another program onto a group | Bring them to the Desktop and file them in that group (move within a drive, copy across drives; Ctrl copies, Shift moves) |
@@ -106,6 +107,8 @@ Checked by driving the real app on Windows 11 build 26300 with synthetic mouse a
 | Keyboard: Page Up/Down, Ctrl+X, Shift+Delete, Enter, F5, the Menu key, paste into a portal | Implemented, not exercised |
 | Multi-select: Ctrl+click toggles, Shift+click ranges, Ctrl+Shift+click adds a range, a plain click on a selected icon reduces to it, Ctrl+A, Shift+arrows and Shift+End; dragging two icons into another group together; copy and paste of two folders; deleting five folders at once to the Recycle Bin; the combined right-click menu and Properties sheet; keyboard focus returns to the desktop after an icon menu | Verified (deletes guarded: every selected name checked first) |
 | Multi-select: dragging several icons out to Explorer, cutting several, double-clicking a selection to open all | Implemented, not exercised |
+| Wallpaper colours: six colours found in a real wallpaper and ranked by share (most prominent 44 %); the Themes section and the editor quick picks (a pick sets the colour, sends nothing) | Verified |
+| Wallpaper colours: \"Apply to all groups\" and \"Use for new groups\" on the real desktop | Implemented; the recolour command is unit-tested, not pressed live (it would have recoloured the user's real groups) |
 | Materials on the desktop: acrylic, frosted glass, Mica, gradient, solid paper with grain; blurred wallpaper, rounded corners, top highlight | Verified (screenshots) |
 | Typography and icon looks on the desktop: another font, letter spacing, labels beside icons, centred bold title, circular icon backgrounds, reduced icon colour | Verified (screenshots) |
 | Appearance editor: opens for a group, live preview on the desktop while editing, Cancel restores the group, Apply keeps the look | Verified (driven through the WebView2 DevTools protocol, not by mouse) |

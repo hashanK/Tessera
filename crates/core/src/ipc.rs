@@ -1,6 +1,6 @@
 //! Commands another process (the settings window, a script) can send to the running organiser.
 //! They are JSON objects tagged by `cmd`, e.g. `{"cmd":"fence","id":2,"opacity":80}`.
-use crate::look::Preset;
+use crate::look::{Preset, Rgb};
 use crate::model::{Config, Rect, Sort, Style, TabStyle, Theme, Tint};
 use crate::rules::Category;
 use serde::{Deserialize, Serialize};
@@ -92,6 +92,20 @@ pub enum Command {
     ThemeDelete { name: String },
     /// Turn wallpaper blur, grain and shadows off (`true`) or back on.
     Effects { low: bool },
+    /// Follow the wallpaper: on, every group takes its most prominent colour now and whenever the
+    /// wallpaper changes (with a matching accent if `accent`).
+    WallpaperAuto {
+        on: bool,
+        #[serde(default)]
+        accent: bool,
+    },
+    /// Give every group this background colour (e.g. picked from the wallpaper), and optionally
+    /// this accent. Everything else about each group's look stays as it is.
+    RecolorAll {
+        color: Rgb,
+        #[serde(default)]
+        accent: Option<Rgb>,
+    },
     Quit,
 }
 
@@ -115,6 +129,8 @@ pub enum Effect {
     SaveOnly,
     /// Ask the user for a folder, then add a portal for it.
     PickPortal,
+    /// Recolour every group from the wallpaper (it may need capturing first).
+    WallpaperColors,
     /// Which groups have windows changed (tabs combined, split or reordered): sync the windows.
     Windows,
     Quit,
@@ -315,6 +331,22 @@ impl Config {
                     Effect::None
                 }
             }
+            Command::RecolorAll { color, accent } => {
+                let hosts = self.hosts();
+                for f in self.fences.iter_mut().filter(|f| hosts.contains(&f.id)) {
+                    f.style.recolor(color, accent);
+                }
+                Effect::Restyle(hosts)
+            }
+            Command::WallpaperAuto { on, accent } => {
+                self.wallpaper_auto = on;
+                self.wallpaper_accent = accent;
+                if on {
+                    Effect::WallpaperColors
+                } else {
+                    Effect::SaveOnly
+                }
+            }
             Command::Effects { low } => {
                 if self.low_effects == low {
                     return Effect::None;
@@ -435,6 +467,21 @@ mod tests {
             s.sanitize();
             assert_eq!(s, t.style, "{} out of range", t.name);
         }
+    }
+
+    #[test]
+    fn recolor_all_changes_only_colours() {
+        let (mut c, a, b) = two_groups();
+        c.fence_mut(b).unwrap().style.material = Material::Gradient;
+        c.fence_mut(a).unwrap().style.icon = 64;
+        let e = c.apply(parse(r##"{"cmd":"recolor_all","color":"#203040","accent":"#80c0ff"}"##), AREA);
+        assert_eq!(e, Effect::Restyle(vec![a, b]));
+        let (sa, sb) = (&c.fence(a).unwrap().style, &c.fence(b).unwrap().style);
+        assert_eq!((sa.color, sa.accent, sa.icon, sa.material), (Some(Rgb::hex(0x203040)), Some(Rgb::hex(0x80c0ff)), 64, Material::Transparent));
+        assert_eq!(sb.gradient.stops.first(), Some(&Rgb::hex(0x203040)), "a gradient starts from the new colour");
+        // Without an accent, the accent is left alone.
+        c.apply(parse(r##"{"cmd":"recolor_all","color":"#102030"}"##), AREA);
+        assert_eq!(c.fence(a).unwrap().style.accent, Some(Rgb::hex(0x80c0ff)));
     }
 
     #[test]

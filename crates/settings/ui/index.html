@@ -257,6 +257,27 @@
   .tcard .actions { justify-content: flex-start; gap: 4px; }
   .tcard .btn { padding: 4px 10px; font-size: 12px; }
 
+  /* ---- wallpaper colours ---- */
+  .wallpal { display: grid; grid-template-columns: 176px 1fr; gap: 20px; padding: 14px 16px 18px; align-items: start; }
+  .wp-side { display: flex; flex-direction: column; gap: 8px; }
+  .wp-thumb { height: 99px; border-radius: 6px; background: #222 center / cover no-repeat; box-shadow: inset 0 0 0 1px var(--line); }
+  .wp-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .pal { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pchip { width: 40px; height: 40px; border-radius: 8px; border: 0; padding: 0; background: var(--c); box-shadow: inset 0 0 0 1px #ffffff22, 0 0 0 1px var(--line); position: relative; transition: transform .1s; }
+  .pchip:hover { transform: translateY(-1px); }
+  .pchip[aria-pressed=true] { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--accent); }
+  .pchip small { position: absolute; left: -4px; right: -4px; bottom: -17px; font-size: 10px; color: var(--faint); text-align: center; }
+  .wp-prev { height: 104px; border-radius: 6px; display: grid; place-items: center; overflow: hidden; }
+  .pal-top { font-size: 12px; color: var(--dim); }
+  .pal-top b { color: var(--ink); font-weight: 600; }
+  .palmini { display: inline-flex; gap: 3px; margin-right: 6px; }
+  .palmini button { width: 16px; height: 16px; border-radius: 4px; border: 0; padding: 0; background: var(--c); box-shadow: 0 0 0 1px var(--line); }
+  .palmini button:hover { transform: scale(1.15); }
+  @media (max-width: 860px) { .wallpal { grid-template-columns: 1fr; } }
+
+  /* A refresh that comes from outside (a new wallpaper) cross-fades instead of jumping. */
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .35s; animation-timing-function: ease; }
+
   #toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 20px); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -687,11 +708,11 @@ function editorPage() {
       <div class="card"><div class="mats">${mats}</div>
         ${d.material === "Gradient" ? field("gradient.stops", "Colours", `<span class="colorctl">${stops}</span>`) + field("gradient.radial", "Shape", edSeg("gradient.radial", [[false, "Linear"], [true, "Radial"]])) + (g.radial ? "" : field("gradient.angle", "Direction", edSlider("gradient.angle", 0, 359, 1, "°"))) : ""}
         ${d.material === "Solid" || d.material === "Gradient" ? "" : field("tint", "Colour family", swatches("ed-tint", 0, d.tint), "Sets the background and accent together.")}
-        ${d.material === "Gradient" ? "" : field("color", d.material === "Solid" ? "Colour" : "Background colour", edColor("color", p.surface))}
+        ${d.material === "Gradient" ? "" : field("color", d.material === "Solid" ? "Colour" : "Background colour", palMini("color") + edColor("color", p.surface))}
         ${d.material === "Solid" ? "" : field("opacity", isWall ? "Tint strength" : "Opacity", edSlider("opacity", 5, 100, 1, "%"))}
         ${d.material === "Acrylic" || d.material === "Frosted" ? field("blur", "Blur", edSlider("blur", 0, 100, 1, "%")) : ""}
         ${field("noise", "Grain", edSlider("noise", 0, 100, 1, "%"))}
-        ${field("accent", "Accent", edColor("accent", p.accent), "Front tab, selection and drop marker.")}
+        ${field("accent", "Accent", palMini("accent") + edColor("accent", p.accent), "Front tab, selection and drop marker.")}
       </div>
       <h2>Shape and border</h2>
       <div class="card">
@@ -820,6 +841,7 @@ const pages = {
     return `
     <div class="head"><div><h1>Themes</h1><p class="lede">Complete looks for a group: material, colours, border, shadow, text and icons. Applying one keeps each group's icon size.</p></div>
       <span style="display:flex;gap:8px"><button class="btn" data-act="theme-import" data-id="0" data-v="">Import…</button><button class="btn primary" data-act="theme-new" data-id="0" data-v="">New theme</button></span></div>
+    ${wallpaperSection(c)}
     <h2>Yours</h2>
     ${mine.length ? `<div class="tgrid">${mine.map((t) => card({ ...t, builtin: false })).join("")}</div>` : `<p class="note" style="margin:0 2px 8px">Themes you save from the editor, duplicate or import appear here.</p>`}
     <h2>Built in</h2>
@@ -933,6 +955,34 @@ document.addEventListener("click", (e) => {
     case "theme-rename": renaming = v; draw(); { const i = document.querySelector('input[data-act="theme-name"]'); if (i) { i.focus(); i.select(); } } break;
     case "theme-delete": if (confirmTheme === v) { confirmTheme = null; post({ cmd: "theme_delete", name: v }); } else { confirmTheme = v; draw(); } break;
     case "low-fx": post({ cmd: "effects", low: v === "true" }); break;
+    // ---- wallpaper colours
+    case "pal-pick": palPick = v; draw(); break;
+    case "pal-accent":
+      palAccent = v === "true";
+      // In auto mode the accent choice is part of the setting.
+      if (S.config && S.config.wallpaper_auto) post({ cmd: "wallpaper_auto", on: true, accent: palAccent });
+      draw();
+      break;
+    case "pal-auto": {
+      const on = v === "true";
+      post({ cmd: "wallpaper_auto", on, accent: palAccent });
+      toast(on ? "Groups now follow your wallpaper's colour" : "Groups keep their colours when the wallpaper changes");
+      break;
+    }
+    case "pal-all": {
+      const color = palPick || toHex(PALETTE[0].rgb);
+      post({ cmd: "recolor_all", color, accent: palAccent ? paletteAccent(color) : null });
+      toast("Every group now uses this colour");
+      break;
+    }
+    case "pal-new": {
+      const color = palPick || toHex(PALETTE[0].rgb), s = clone(S.config.default_style);
+      s.color = color; if (palAccent) s.accent = paletteAccent(color); s.gradient.stops = [color, deeper(color)];
+      post({ cmd: "look_defaults", style: s });
+      toast("New groups will use this colour");
+      break;
+    }
+    case "ed-pal": setp(ED.draft, path, v); edited(true); break;
     case "tab-pick": post({ cmd: "tab_select", id }); break;
     case "tab-add": focusTabOf = id; post({ cmd: "tab_add", id }); break;
     case "tab-left": post({ cmd: "tab_move", id, delta: -1 }); break;
@@ -971,7 +1021,124 @@ function uniqueTheme(base) {
   while (names.has(name.toLowerCase())) name = `${base.slice(0, 33)} ${n++}`;
   return name;
 }
-window.setWallpaper = (url) => { WALL = url; wallAsked = true; if (S) draw(); };
+/** Redraw with a short cross-fade, for changes that don't come from the user's own clicks. */
+function drawSmooth() {
+  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches || !document.startViewTransition;
+  const a = document.activeElement;
+  if (dragging || (a && a.matches("input[type=text]"))) { pending = true; return; }   // never under the user's hands
+  if (calm) draw(); else document.startViewTransition(() => draw());
+}
+
+/** The wallpaper changed while the window is open. Keep showing the old wallpaper and colours
+ *  until the new palette is worked out and the image decoded, then switch everything at once. */
+window.wallpaperChanged = async (url, state) => {
+  const palette = url ? await extractPalette(url) : [];
+  WALL = url; wallAsked = true;
+  PALETTE = palette; palPick = palette.length ? toHex(palette[0].rgb) : null;
+  S = state;
+  drawSmooth();
+};
+
+window.setWallpaper = (url) => {
+  // A different wallpaper: forget the old colours and the pick made from them.
+  if (url !== WALL) { PALETTE = null; palPick = null; }
+  WALL = url; wallAsked = true;
+  if (S) draw();
+  if (url) extractPalette(url).then((p) => { PALETTE = p; if (!palPick && p.length) palPick = toHex(p[0].rgb); if (S) draw(); });
+};
+
+// ---------------------------------------------------------------- wallpaper colours
+// The wallpaper's main colours: k-means over a small copy of the image, merged where clusters
+// look alike, ordered by how much of the wallpaper each covers. Runs once per wallpaper, here in
+// the settings window; the organiser is not involved.
+let PALETTE = null, palPick = null, palAccent = true, palAccentRead = false;
+function extractPalette(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const W = 96, H = Math.max(1, Math.round(96 * img.height / img.width));
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const cx = cv.getContext("2d"); cx.drawImage(img, 0, 0, W, H);
+      const d = cx.getImageData(0, 0, W, H).data, px = [];
+      for (let i = 0; i < d.length; i += 4) px.push([d[i], d[i + 1], d[i + 2]]);
+      // Perceptual-ish distance: green matters most, blue least.
+      const dist = (a, b) => 2 * (a[0] - b[0]) ** 2 + 4 * (a[1] - b[1]) ** 2 + 3 * (a[2] - b[2]) ** 2;
+      // Deterministic start: the average colour, then repeatedly the pixel farthest from all centres.
+      const mean = [0, 1, 2].map((c) => px.reduce((s, p) => s + p[c], 0) / px.length);
+      const centres = [mean];
+      while (centres.length < 8) {
+        let best = px[0], far = -1;
+        for (let i = 0; i < px.length; i += 7) { const near = Math.min(...centres.map((c) => dist(px[i], c))); if (near > far) { far = near; best = px[i]; } }
+        centres.push([...best]);
+      }
+      let counts = [];
+      for (let iter = 0; iter < 12; iter++) {
+        const sums = centres.map(() => [0, 0, 0]); counts = centres.map(() => 0);
+        for (const p of px) {
+          let k = 0, bd = Infinity;
+          centres.forEach((c, j) => { const v = dist(p, c); if (v < bd) { bd = v; k = j; } });
+          sums[k][0] += p[0]; sums[k][1] += p[1]; sums[k][2] += p[2]; counts[k]++;
+        }
+        centres.forEach((c, j) => { if (counts[j]) for (let ch = 0; ch < 3; ch++) c[ch] = sums[j][ch] / counts[j]; });
+      }
+      // Merge look-alikes, then order by share.
+      const clusters = centres.map((c, j) => ({ rgb: c, n: counts[j] })).filter((c) => c.n > 0);
+      for (let i = 0; i < clusters.length; i++) for (let j = clusters.length - 1; j > i; j--) {
+        if (dist(clusters[i].rgb, clusters[j].rgb) < 9 * 24 * 24) {
+          const a = clusters[i], b = clusters[j], n = a.n + b.n;
+          a.rgb = a.rgb.map((v, ch) => (v * a.n + b.rgb[ch] * b.n) / n); a.n = n; clusters.splice(j, 1);
+        }
+      }
+      clusters.sort((a, b) => b.n - a.n);
+      resolve(clusters.slice(0, 6).map((c) => ({ rgb: c.rgb.map(Math.round), share: c.n / px.length })));
+    };
+    img.onerror = () => resolve([]);
+    img.src = url;
+  });
+}
+/** An accent to go with background `bg`: the most colourful other wallpaper colour, made light
+ *  enough to stand out on a group. */
+function paletteAccent(bg) {
+  const sat = (c) => { const mx = Math.max(...c), mn = Math.min(...c); return mx === 0 ? 0 : (mx - mn) / mx; };
+  const b = toRgb(bg), others = (PALETTE || []).map((p) => p.rgb).filter((c) => Math.abs(lum(c) - lum(b)) > 0.04 || sat(c) > sat(b) + 0.15);
+  let pick = (others.length ? others : [b]).reduce((best, c) => (sat(c) * (0.4 + lum(c)) > sat(best) * (0.4 + lum(best)) ? c : best));
+  for (let i = 0; i < 8 && lum(pick) < 0.45; i++) pick = mixc(pick, [255, 255, 255], 0.25);
+  return toHex(pick);
+}
+const deeper = (hex) => toHex(toRgb(hex).map((v) => v * 0.55));
+const palMini = (path) => PALETTE && PALETTE.length
+  ? `<span class="palmini" title="Colours from your wallpaper">${PALETTE.map((p) => `<button style="--c:${toHex(p.rgb)}" data-act="ed-pal" data-id="${path}" data-v="${toHex(p.rgb)}" aria-label="Wallpaper colour ${toHex(p.rgb)}"></button>`).join("")}</span>`
+  : "";
+function wallpaperSection(c) {
+  if (!palAccentRead && c.wallpaper_auto) { palAccent = !!c.wallpaper_accent; palAccentRead = true; }
+  const note = (t) => `<h2>From your wallpaper</h2><div class="card"><p class="note" style="padding:14px 16px;margin:0">${t}</p></div>`;
+  if (!WALL) return note(wallAsked ? "Reading your wallpaper…" : "Your wallpaper couldn't be read.");
+  if (!PALETTE) return note("Finding its colours…");
+  if (!PALETTE.length) return note("No colours could be found in your wallpaper.");
+  const pick = palPick || toHex(PALETTE[0].rgb), accent = paletteAccent(pick);
+  const sample = clone(c.default_style); sample.color = pick; if (palAccent) sample.accent = accent; sample.gradient.stops = [pick, deeper(pick)];
+  return `<h2>From your wallpaper</h2>
+    <div class="card wallpal">
+      <div class="wp-side">
+        <div class="wp-thumb" style="background-image:url(${WALL})" title="Your wallpaper"></div>
+        <div class="wp-prev stage" style="${stageStyle("wall", null)}" title="Preview"><div style="zoom:.38">${groupHtml(sample, { title: "Preview", items: 3, width: 300, height: 190, theme: c.theme })}</div></div>
+      </div>
+      <div class="wp-body">
+        <div class="label">Colours in your wallpaper<small>Largest first. Pick one as the background of every group; each group keeps its material, opacity and everything else.</small></div>
+        <div class="pal-top">Most prominent: <b>${toHex(PALETTE[0].rgb)}</b>, ${Math.round(PALETTE[0].share * 100)} % of the wallpaper. Selected: <b>${pick}</b>${palAccent ? `, accent <b>${accent}</b>` : ""}</div>
+        <div class="pal">${PALETTE.map((p, i) => `<button class="pchip" style="--c:${toHex(p.rgb)}" data-act="pal-pick" data-id="0" data-v="${toHex(p.rgb)}" aria-pressed="${toHex(p.rgb) === pick}" title="${toHex(p.rgb)}, ${Math.round(p.share * 100)} % of the wallpaper"><small>${Math.round(p.share * 100)} %</small></button>`).join("")}</div>
+        <div class="row" style="padding:18px 0 0;min-height:0;gap:12px">
+          <div class="label">Follow my wallpaper<small>${c.wallpaper_auto ? "On: when you change your wallpaper, every group takes its most prominent colour by itself. Changing a group\u2019s colour by hand lasts until the next wallpaper." : "When you change your wallpaper, every group takes its most prominent colour by itself."}</small></div>
+          ${toggle("pal-auto", 0, !!c.wallpaper_auto, "Follow my wallpaper")}
+        </div>
+        <div class="actions" style="justify-content:flex-start;margin-top:12px;flex-wrap:nowrap">
+          <span class="label" style="flex:none;color:var(--dim)">Matching accent</span>${toggle("pal-accent", 0, palAccent, "Matching accent")}
+          <button class="btn primary" data-act="pal-all" data-id="0" data-v="">Apply to all groups</button>
+          <button class="btn" data-act="pal-new" data-id="0" data-v="">Use for new groups</button>
+        </div>
+      </div>
+    </div>`;
+}
 
 // Sliders preview live, in this window and on the desktop; at most one command per frame.
 let queued = null;
