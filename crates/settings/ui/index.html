@@ -447,10 +447,19 @@ function groupHtml(style, o) {
   const cols = Math.max(1, Math.floor((o.width - 2 * s.padding) / cellW));
   const items = SAMPLES.slice(0, o.items ?? cols * 2);
   const titleCss = `height:${t.height}px;font-size:${t.size}px;font-weight:${t.weight};color:${rgba(p.title, 0.88)};justify-content:${{ Left: "flex-start", Center: "center", Right: "flex-end" }[t.align]};text-align:${t.align.toLowerCase()};letter-spacing:${x.letter_spacing}px;`
-    + (t.band ? `background:${rgba(p.title, t.band / 100 * 0.6)};` : "") + (t.separator ? `box-shadow:inset 0 -1px 0 ${rgba(p.ink, 0.1)};` : "");
+    + (t.band ? `background:${rgba(t.band_color ? toRgb(t.band_color) : p.title, t.band / 100 * 0.6)};` : "") + (t.separator ? `box-shadow:inset 0 -1px 0 ${rgba(p.ink, 0.1)};` : "");
   const head = o.tabs && o.tabs.length > 1
     ? `<div class="tg-tabs">${o.tabs.map((tb) => `<b style="${tb.on ? `background:${rgba(p.accent, p.light ? 0.32 : 0.62)};color:${rgba(p.title, 0.98)}` : `color:${rgba(p.secondary, 0.58)}`}">${esc(tb.title)}</b>`).join("")}</div>`
-    : `<span>${esc(o.title)}</span>`;
+    : (() => {
+      const deco = t.pill_color ? toRgb(t.pill_color) : p.accent;
+      const deco_css = t.style === "Pill"
+        ? `flex:0 1 auto;padding:3px 8px;margin:0 -8px;border-radius:999px;background:${rgba(deco, t.pill_opacity / 100)};`
+        : t.style === "Underline"
+          ? `flex:0 1 auto;padding-bottom:3px;background:linear-gradient(${rgba(deco, 0.95)},${rgba(deco, 0.95)}) left bottom / min(48px, 100%) 2.5px no-repeat;`
+          : "";
+      const count = t.count === "Always" ? `<em style="flex:none;font-style:normal;font-weight:400;font-size:${Math.max(9, t.size - 1.5)}px;color:${rgba(p.secondary, 0.45)};margin-left:auto;padding-left:8px">${o.items ?? 6}</em>` : "";
+      return `<span style="${deco_css}${t.uppercase ? "text-transform:uppercase;" : ""}">${esc(o.title)}</span>${count}`;
+    })();
   // A live preview reacts to the pointer (hover) and to clicks (selection) with the same
   // durations and curves as the desktop; a still one shows the second icon hovered and the third selected.
   const selTile = `background:${rgba(p.accent, 0.32)};box-shadow:inset 0 0 0 1px ${rgba(p.accent, 0.6)};`;
@@ -735,8 +744,15 @@ function editorPage() {
         ${field("title.size", "Size", edSlider("title.size", 9, 20, 0.5, "px"))}
         ${field("title.weight", "Weight", edSeg("title.weight", weights))}
         ${field("title.color", "Colour", edColor("title.color", p.title))}
-        ${field("title.band", "Band", edSlider("title.band", 0, 100, 1, "%"), "A tinted strip behind the title.")}
+        ${field("title.style", "Title style", edSeg("title.style", [["Plain", "Plain"], ["Pill", "Pill"], ["Underline", "Underline"]]), "The title inside a rounded pill, or with a short bar under it.")}
+        ${d.title.style !== "Plain" ? field("title.pill_color", d.title.style === "Pill" ? "Pill colour" : "Underline colour", palMini("title.pill_color") + edColor("title.pill_color", p.accent)) : ""}
+        ${d.title.style === "Pill" ? field("title.pill_opacity", "Pill opacity", edSlider("title.pill_opacity", 5, 100, 1, "%")) : ""}
+        ${field("title.band", "Row tint", edSlider("title.band", 0, 100, 1, "%"), "Tints the whole title row.")}
+        ${d.title.band > 0 ? field("title.band_color", "Row tint colour", palMini("title.band_color") + edColor("title.band_color", p.title)) : ""}
+        ${field("title.uppercase", "Capitals", edToggle("title.uppercase"))}
+        ${field("title.count", "Item count", edSeg("title.count", [["Hover", "On hover"], ["Always", "Always"], ["Never", "Never"]]))}
         ${field("title.separator", "Separator line", edToggle("title.separator"))}
+        <div class="row"><div class="label">Every group<small>Give all groups this title bar. Their other settings stay as they are.</small></div><button class="btn" data-act="ed-title-all" data-id="0" data-v="">Apply title bar to all groups</button></div>
       </div>
       <h2>Labels</h2>
       <div class="card">
@@ -983,6 +999,7 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "ed-pal": setp(ED.draft, path, v); edited(true); break;
+    case "ed-title-all": post({ cmd: "title_all", title: ED.draft.title }); toast("Every group now has this title bar"); break;
     case "tab-pick": post({ cmd: "tab_select", id }); break;
     case "tab-add": focusTabOf = id; post({ cmd: "tab_add", id }); break;
     case "tab-left": post({ cmd: "tab_move", id, delta: -1 }); break;

@@ -90,6 +90,8 @@ pub enum Command {
     ThemeSave { name: String, style: Box<Style> },
     ThemeRename { from: String, to: String },
     ThemeDelete { name: String },
+    /// Give every group this title bar, leaving the rest of each look alone.
+    TitleAll { title: Box<crate::look::TitleBar> },
     /// Turn wallpaper blur, grain and shadows off (`true`) or back on.
     Effects { low: bool },
     /// Follow the wallpaper: on, every group takes its most prominent colour now and whenever the
@@ -347,6 +349,15 @@ impl Config {
                     Effect::SaveOnly
                 }
             }
+            Command::TitleAll { title } => {
+                let mut probe = Style { title: *title, ..Style::default() };
+                probe.sanitize();
+                let hosts = self.hosts();
+                for f in self.fences.iter_mut().filter(|f| hosts.contains(&f.id)) {
+                    f.style.title = probe.title.clone();
+                }
+                Effect::Restyle(hosts)
+            }
             Command::Effects { low } => {
                 if self.low_effects == low {
                     return Effect::None;
@@ -374,7 +385,7 @@ fn theme_name(name: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::look::{Material, Rgb};
+    use crate::look::{CountMode, Material, Rgb, TitleStyle};
 
     const AREA: Rect = Rect { x: 0, y: 0, w: 1920, h: 1040 };
 
@@ -482,6 +493,18 @@ mod tests {
         // Without an accent, the accent is left alone.
         c.apply(parse(r##"{"cmd":"recolor_all","color":"#102030"}"##), AREA);
         assert_eq!(c.fence(a).unwrap().style.accent, Some(Rgb::hex(0x80c0ff)));
+    }
+
+    #[test]
+    fn title_all_copies_only_the_title_bar() {
+        let (mut c, a, b) = two_groups();
+        c.fence_mut(b).unwrap().style.opacity = 30;
+        let e = c.apply(parse(r##"{"cmd":"title_all","title":{"style":"Pill","pill_color":"#ff8800","pill_opacity":250,"uppercase":true,"count":"Never"}}"##), AREA);
+        assert_eq!(e, Effect::Restyle(vec![a, b]));
+        let t = &c.fence(b).unwrap().style.title;
+        assert_eq!((t.style, t.pill_color, t.pill_opacity, t.uppercase, t.count), (TitleStyle::Pill, Some(Rgb::hex(0xff8800)), 100, true, CountMode::Never));
+        assert_eq!(c.fence(b).unwrap().style.opacity, 30, "the rest of the look is untouched");
+        assert_eq!(c.fence(a).unwrap().style.title, *t);
     }
 
     #[test]

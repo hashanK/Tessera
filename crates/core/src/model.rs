@@ -179,6 +179,7 @@ impl Style {
         let t = &mut self.title;
         t.height = t.height.clamp(22, 48);
         t.band = t.band.min(100);
+        t.pill_opacity = t.pill_opacity.min(100);
         t.size = if t.size.is_finite() { t.size.clamp(9.0, 20.0) } else { 12.5 };
         t.weight = t.weight.clamp(100, 900);
         let x = &mut self.text;

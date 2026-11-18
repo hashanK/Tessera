@@ -176,6 +176,28 @@ pub enum Align {
     Right,
 }
 
+/// How the title itself is drawn.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TitleStyle {
+    /// Just the text.
+    #[default]
+    Plain,
+    /// The text inside a rounded pill.
+    Pill,
+    /// The text with a short accent bar under it.
+    Underline,
+}
+
+/// When the item count shows beside the title.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CountMode {
+    /// While the pointer is over the group, and when it is rolled up. The original behaviour.
+    #[default]
+    Hover,
+    Always,
+    Never,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TitleBar {
@@ -190,11 +212,35 @@ pub struct TitleBar {
     pub weight: u16,
     /// `None` uses the text colour of the theme.
     pub color: Option<Rgb>,
+    pub style: TitleStyle,
+    /// Tint of the band behind the title row; `None` is a lighter shade of the title colour.
+    pub band_color: Option<Rgb>,
+    /// Colour of the pill or underline; `None` uses the accent.
+    pub pill_color: Option<Rgb>,
+    /// Opacity of the pill, percent.
+    pub pill_opacity: u8,
+    /// Show the title in capitals.
+    pub uppercase: bool,
+    pub count: CountMode,
 }
 
 impl Default for TitleBar {
     fn default() -> Self {
-        TitleBar { height: 30, band: 0, separator: false, align: Align::Left, size: 12.5, weight: 600, color: None }
+        TitleBar {
+            height: 30,
+            band: 0,
+            separator: false,
+            align: Align::Left,
+            size: 12.5,
+            weight: 600,
+            color: None,
+            style: TitleStyle::Plain,
+            band_color: None,
+            pill_color: None,
+            pill_opacity: 35,
+            uppercase: false,
+            count: CountMode::Hover,
+        }
     }
 }
 

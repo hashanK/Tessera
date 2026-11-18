@@ -388,6 +388,20 @@ impl Renderer {
         }
     }
 
+    /// Width of a line of text in a format, with any extra letter spacing.
+    unsafe fn measure(&self, text: &str, font: &IDWriteTextFormat, spacing: f32) -> f32 {
+        let wide: Vec<u16> = text.encode_utf16().collect();
+        let width = self
+            .dwrite
+            .CreateTextLayout(&wide, font, 4096.0, 64.0)
+            .and_then(|l| {
+                let mut m = DWRITE_TEXT_METRICS::default();
+                l.GetMetrics(&mut m).map(|_| m.width)
+            })
+            .unwrap_or(40.0);
+        width + spacing * wide.len() as f32
+    }
+
     /// Lay the tabs out across the title bar: equal shares, or each as wide as its name.
     unsafe fn tab_layout(&self, v: &FenceView, font: &IDWriteTextFormat, x0: f32, x1: f32) -> Vec<(f32, f32)> {
         let n = v.tabs.len();
@@ -678,7 +692,8 @@ impl Renderer {
         // Title band and separator.
         if style.title.band > 0 {
             self.rt.PushAxisAlignedClip(&rect(0.0, 0.0, w, title_h), D2D1_ANTIALIAS_MODE_ALIASED);
-            self.fill(&panel, color(pal.title, style.title.band as f32 / 100.0 * 0.6));
+            let tint = style.title.band_color.map(|c| c.0).unwrap_or(pal.title);
+            self.fill(&panel, color(tint, style.title.band as f32 / 100.0 * 0.6));
             self.rt.PopAxisAlignedClip();
         }
         if style.title.separator && !v.collapsed {
@@ -710,13 +725,40 @@ impl Renderer {
                 tab_rects.push((x.round() as i32, tw.round() as i32));
             }
         } else {
-            // Title; the item count is secondary chrome and only shows while the pointer is over the group.
-            let count_w = if v.hot || v.collapsed { s(34.0) } else { 0.0 };
+            // Title; by default the item count is secondary chrome that shows while the pointer is over the group.
+            let t = &style.title;
+            let count_on = match t.count {
+                CountMode::Always => true,
+                CountMode::Never => false,
+                CountMode::Hover => v.hot || v.collapsed,
+            };
+            let count_w = if count_on { s(34.0) } else { 0.0 };
             let title_x = if v.back { s(30.0) } else { s(12.0) };
             // A centred title is centred on the whole bar, not on what is left beside the count.
             let title_w = if style.title.align == Align::Left { w - title_x - s(8.0) - count_w } else { w - 2.0 * title_x.max(count_w + s(12.0)) };
             let title_x = if style.title.align == Align::Left { title_x } else { title_x.max(count_w + s(12.0)) };
-            self.spaced_text(v.title, &fonts.title, rect(title_x, 0.0, title_w.max(1.0), title_h), color(pal.title, 0.88), style.text.letter_spacing * m.scale);
+            let label = if t.uppercase { v.title.to_uppercase() } else { v.title.to_string() };
+            let spacing = style.text.letter_spacing * m.scale;
+            if t.style == TitleStyle::Plain {
+                self.spaced_text(&label, &fonts.title, rect(title_x, 0.0, title_w.max(1.0), title_h), color(pal.title, 0.88), spacing);
+            } else {
+                // Pill or underline: sized to the text, placed by the title alignment.
+                let text_w = self.measure(&label, &fonts.title, spacing).min(title_w.max(1.0));
+                let x = match t.align {
+                    Align::Left => title_x,
+                    Align::Center => title_x + (title_w - text_w) / 2.0,
+                    Align::Right => title_x + title_w - text_w,
+                };
+                let deco = t.pill_color.map(|c| c.0).unwrap_or(pal.accent);
+                if t.style == TitleStyle::Pill {
+                    let ph = (title_h - s(10.0)).max(s(14.0));
+                    let pill = rounded(x - s(8.0), (title_h - ph) / 2.0, text_w + s(16.0), ph, ph / 2.0);
+                    self.fill(&pill, color(deco, t.pill_opacity as f32 / 100.0));
+                } else {
+                    self.fill(&rounded(x, title_h - s(7.0), text_w.min(s(48.0)).max(s(14.0)), s(2.5), s(1.25)), color(deco, 0.95));
+                }
+                self.spaced_text(&label, &fonts.title, rect(x - 1.0, 0.0, text_w + 2.0, title_h), color(pal.title, 0.9), spacing);
+            }
             if count_w > 0.0 {
                 self.text(&v.items.len().to_string(), &fonts.count, rect(w - s(12.0) - count_w, 0.0, count_w, title_h), color(pal.secondary, 0.45));
             }
