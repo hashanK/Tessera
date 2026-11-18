@@ -338,7 +338,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 const getp = (o, path) => path.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
 const setp = (o, path, v) => { const k = path.split("."); const last = k.pop(); k.reduce((a, x) => a[x], o)[last] = v; };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-let WALL = null, wallAsked = false;
+let WALL = null, wallAsked = false, readySent = false;
 
 function lowFx() { return !!(S.config && S.config.low_effects); }
 function effective(style) {
@@ -873,6 +873,8 @@ function draw() {
   else if (page === "about" || page === "behaviour") html += pages[page]();
   else html += `<div class="empty"><h1>No groups yet</h1><p class="lede">Start Tessera once and your groups will appear here.</p></div>`;
   document.getElementById("page").innerHTML = html;
+  // The window stays hidden until the first frame is on screen (see the host): then show it.
+  if (!readySent) { readySent = true; requestAnimationFrame(() => requestAnimationFrame(() => post({ cmd: "ready" }))); }
   if (page === "editor" && ED) markSelected(false);
   main.scrollTop = scroll;
   justOpened = null;

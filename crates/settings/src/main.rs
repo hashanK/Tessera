@@ -100,6 +100,16 @@ fn state(error: Option<&str>) -> Value {
     })
 }
 
+/// Whether Windows apps are set to dark mode (Settings > Personalisation > Colours).
+fn dark_mode() -> bool {
+    let out = Command::new("reg")
+        .args(["query", r"HKCUSoftwareMicrosoftWindowsCurrentVersionThemesPersonalize", "/v", "AppsUseLightTheme"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    // "0x0" means dark; missing or unreadable means the default, light.
+    out.map(|o| String::from_utf8_lossy(&o.stdout).contains("0x0")).unwrap_or(false)
+}
+
 /// Installed fonts, listed once per run (enumerating them takes a moment).
 fn fonts() -> &'static [String] {
     static FONTS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
@@ -234,18 +244,32 @@ fn main() {
 
     let event_loop = EventLoopBuilder::<String>::with_user_event().build();
     let proxy = event_loop.create_proxy();
+    // The window starts hidden and is shown once the page has drawn its first frame (the page
+    // sends "ready"). Shown straight away, it would flash white while WebView2 starts up. Its own
+    // background matches the page too, for the frames around a resize.
+    let dark = dark_mode();
+    let background = if dark { (0x15, 0x17, 0x1B, 255) } else { (0xF4, 0xF5, 0xF7, 255) };
     let window = WindowBuilder::new()
         .with_title(TITLE)
         .with_inner_size(LogicalSize::new(960.0, 680.0))
         .with_min_inner_size(LogicalSize::new(640.0, 460.0))
         .with_window_icon(window_icon())
+        .with_theme(Some(if dark { Theme::Dark } else { Theme::Light }))
+        .with_background_color(background)
+        .with_visible(false)
         .build(&event_loop)
         .expect("window");
+    // Should the page never say it is ready (a script error), show the window anyway.
+    let late = event_loop.create_proxy();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(2500));
+        let _ = late.send_event(r#"{"cmd":"ready"}"#.to_string());
+    });
     // WebView2 needs a writable profile folder; next to the exe is not writable once installed.
     let mut context = WebContext::new(Some(store::data_dir().join("webview")));
     let webview = WebViewBuilder::new_with_web_context(&mut context)
         // Painted before the page loads, so a dark-mode window never flashes white.
-        .with_background_color(if window.theme() == Theme::Dark { (0x15, 0x17, 0x1B, 255) } else { (0xF4, 0xF5, 0xF7, 255) })
+        .with_background_color(background)
         .with_html(include_str!("../ui/index.html"))
         .with_ipc_handler(move |request| {
             let _ = proxy.send_event(request.body().clone());
@@ -261,7 +285,17 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
         match event {
-            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => *control_flow = ControlFlow::Exit,
+            // Hide first: tearing down WebView2 under a visible window shows a white frame.
+            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+                window.set_visible(false);
+                *control_flow = ControlFlow::Exit;
+            }
+            Event::UserEvent(body) if body.contains(r#""cmd":"ready""#) => {
+                if !window.is_visible() {
+                    window.set_visible(true);
+                    window.set_focus();
+                }
+            }
             // The organiser may have changed things while we were in the background.
             Event::WindowEvent { event: WindowEvent::Focused(true), .. } => run(&push(None)),
             Event::UserEvent(body) => {
